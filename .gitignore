@@ -1,0 +1,17 @@
+.DS_Store
+__pycache__/
+.pytest_cache/
+.venv/
+.runtime/
+.env
+.env.*
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+frontend/vite.config.js
+*.egg-info/
+backend/data/*.db
+backend/data/*.sqlite*
+backend/data/uploads/*
+!backend/data/uploads/.gitkeep

@@ -1,0 +1,21 @@
+[project]
+name = "auto-research-pro-max"
+version = "0.1.0"
+description = "A local-first research copilot with plan approval, paper intake, stage tracking, and Codex/OpenAI setup."
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115.0",
+  "httpx>=0.28.0",
+  "openai>=1.51.0",
+  "pydantic>=2.9.0",
+  "python-multipart>=0.0.12",
+  "pypdf>=5.1.0",
+  "uvicorn>=0.32.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["backend*"]
