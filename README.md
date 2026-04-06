@@ -7,7 +7,7 @@
 
 ## English
 
-[Auto Research Pro Max](https://github.com/JacktheRanger/Auto-Research-Pro-Max) is a local-first research workspace for turning an idea into a paper-grounded plan, getting explicit approval on that plan, and tracking staged execution in one web interface. The goal is not to hide the workflow behind a black-box agent run, but to make planning, grounding, and progress visible.
+Auto Research Pro Max is a local-first research workspace for turning an idea into a paper-grounded plan, getting explicit approval on that plan, and tracking staged execution in one web interface. The goal is not to hide the workflow behind a black-box agent run, but to make planning, grounding, and progress visible.
 
 ## Demo
 
@@ -171,7 +171,7 @@ Issues and focused pull requests are welcome. For larger workflow or architectur
 
 ## 中文
 
-[Auto Research Pro Max](https://github.com/JacktheRanger/Auto-Research-Pro-Max) 是一个本地优先的研究工作台，用来把一个想法整理成基于论文证据的执行计划，在正式执行前完成明确审批，并在同一个 Web 界面里跟踪分阶段执行进度。它的目标不是把流程藏在黑箱 Agent 后面，而是让规划、依据和进展都清晰可见。
+Auto Research Pro Max 是一个本地优先的研究工作台，用来把一个想法整理成基于论文证据的执行计划，在正式执行前完成明确审批，并在同一个 Web 界面里跟踪分阶段执行进度。它的目标不是把流程藏在黑箱 Agent 后面，而是让规划、依据和进展都清晰可见。
 
 ## 演示
 
