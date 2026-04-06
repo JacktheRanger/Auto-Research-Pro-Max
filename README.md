@@ -1,7 +1,7 @@
 # Auto Research Pro Max
 <a id="top"></a>
 
-[GitHub](https://github.com/JacktheRanger/Auto-Research-Pro-Max) | [English](#english) | [中文](#中文)
+[English](#english) | [中文](#中文)
 
 ---
 
