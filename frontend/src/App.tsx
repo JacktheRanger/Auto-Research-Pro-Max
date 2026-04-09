@@ -3,18 +3,21 @@ import ReactMarkdown from "react-markdown";
 import { StageTimeline } from "./components/StageTimeline";
 import {
   api,
+  type LiteratureResult,
   type Paper,
   type Plan,
   type Project,
-  type RuntimeInfo,
   type Run,
   type RunStage,
+  type RuntimeInfo,
   type Settings,
   type StageCatalogItem,
 } from "./lib/api";
 
 type ThemeMode = "light" | "dark";
 type LocaleMode = "en" | "cn";
+
+const activeRunStatuses = new Set(["queued", "running", "paused", "awaiting_approval"]);
 
 const stageLocaleCopy: Record<
   LocaleMode,
@@ -24,52 +27,77 @@ const stageLocaleCopy: Record<
   cn: {
     scope_alignment: {
       label: "范围对齐",
-      summary: "把原始 idea、背景和约束收敛成一个边界明确的研究目标。",
+      summary: "先把研究边界、非目标和验收标准收紧，再做后续扩展。",
       owner: "研究策略 Agent",
     },
     source_grounding: {
       label: "来源 Grounding",
-      summary: "整理用户指定论文和来源，把它们转成后续可用的上下文材料。",
+      summary: "规范化用户提供的论文来源，并补齐可用的证据上下文。",
       owner: "论文输入 Agent",
+    },
+    literature_retrieval: {
+      label: "文献检索",
+      summary: "通过 OpenAlex、Semantic Scholar、Crossref、arXiv 扩展论文覆盖面。",
+      owner: "检索 Mesh",
     },
     literature_map: {
       label: "文献地图",
-      summary: "产出主题、基线方法和开放问题的结构化视图。",
+      summary: "整理主题簇、基线方法和未解决问题。",
       owner: "文献分析 Agent",
     },
     synthesis: {
       label: "综合归纳",
-      summary: "提炼可验证的假设、关键假设前提和值得下注的研究方向。",
+      summary: "把证据整理成可验证的假设、前提和下注方向。",
       owner: "综合分析 Agent",
     },
     experiment_design: {
       label: "实验设计",
-      summary: "定义数据集、评估指标、消融实验和成功标准。",
+      summary: "定义实验矩阵、指标、消融和成功标准，并在门控处等待批准。",
       owner: "实验设计 Agent",
     },
     code_prototype: {
       label: "代码原型",
-      summary: "生成第一版实现草案和运行检查清单。",
+      summary: "把实验设计转成可执行的模块计划、依赖和清单。",
       owner: "Codex 构建 Agent",
+    },
+    experiment_sandbox: {
+      label: "实验沙箱",
+      summary: "在 Docker 中真实执行受控实验 stub，启用超时、依赖白名单和产物采集。",
+      owner: "Sandbox Runner",
     },
     execution_review: {
       label: "执行评审",
-      summary: "评估可行性、预估运行成本，并提前整理失败与修复路径。",
+      summary: "基于真实沙箱结果评估可行性、故障和修复路径。",
       owner: "执行评审 Agent",
     },
-    paper_draft: {
-      label: "论文草稿",
-      summary: "组织摘要、提纲、贡献点和第一版论文稿。",
+    paper_outline: {
+      label: "论文提纲",
+      summary: "先生成结构化提纲、贡献映射和图表计划。",
+      owner: "论文架构 Agent",
+    },
+    paper_drafting: {
+      label: "论文起草",
+      summary: "根据提纲和证据撰写初稿章节。",
       owner: "论文写作 Agent",
+    },
+    paper_revision: {
+      label: "论文修订",
+      summary: "收紧措辞、解决薄弱论断，并在门控处等待批准。",
+      owner: "修订编辑 Agent",
+    },
+    paper_export: {
+      label: "论文导出",
+      summary: "整理 Markdown / LaTeX / PDF handoff 所需的导出包。",
+      owner: "导出管理 Agent",
     },
     peer_review: {
       label: "同行评审",
-      summary: "压力测试核心论点，找出缺口并提出修改任务。",
+      summary: "从 reviewer 视角做压力测试并生成修改建议。",
       owner: "评审小组",
     },
     delivery_package: {
       label: "交付包",
-      summary: "把批准后的计划、阶段输出和下一步建议整理成最终交付材料。",
+      summary: "整合计划、证据、稿件状态、门控决策和下一步建议。",
       owner: "交付管理 Agent",
     },
   },
@@ -78,9 +106,9 @@ const stageLocaleCopy: Record<
 const uiCopy = {
   en: {
     ready: "Ready.",
-    brandTitle: "Plan-gated research GUI for idea-to-delivery workflows.",
+    brandTitle: "Plan-gated research GUI with retrieval, sandboxing, and approval loops.",
     brandBody:
-      "Start from an idea, ground it with papers, approve the plan, and track execution in one place.",
+      "Start from an idea, ground it with papers, approve the plan, and control staged execution in one place.",
     backendReady: "Backend ready",
     backendOffline: "Backend offline",
     liveStages: (count: number) => `${count} live stages`,
@@ -97,7 +125,7 @@ const uiCopy = {
     noConnectionTest: "No connection test yet.",
     projects: "Projects",
     heroEyebrow: "Mandatory Intake Before Execution",
-    heroTitle: "Require idea, background, direction, and must-read papers before planning.",
+    heroTitle: "Require idea, direction, must-read papers, and explicit approvals before the run moves forward.",
     createProject: "Create Project",
     ideaTitle: "Idea / Title",
     ideaTitlePlaceholder: "A concise project title",
@@ -118,7 +146,7 @@ const uiCopy = {
     apiBudgetPlaceholder: "$20 / no hard cap / internal",
     paperIntake: "Paper Intake",
     paperIntakeBody:
-      "Add must-read papers before generating the plan. Local PDFs are parsed; URLs are stored and remote PDFs are downloaded when possible.",
+      "Add local PDFs, remote URLs, or import results from live literature search before generating the plan.",
     localPdf: "Local PDF",
     uploadPdf: "Upload PDF",
     remoteUrl: "Remote URL",
@@ -128,6 +156,12 @@ const uiCopy = {
     whySource: "Why this source should shape the plan",
     remoteUrlPlaceholder: "arXiv / DOI / PDF / paper page",
     addUrlSource: "Add URL Source",
+    literatureSearch: "Literature Discovery",
+    literatureSearchPlaceholder: "Search topic / method / task keywords",
+    search: "Search",
+    importResult: "Import",
+    noLiteratureResults: "No literature results yet.",
+    providerErrors: "Provider Errors",
     planningGate: "Planning Gate",
     generatePlan: "Generate Plan",
     approvePlan: "Approve Plan",
@@ -141,12 +175,12 @@ const uiCopy = {
     started: "Started",
     planningGateLabel: "Planning gate",
     reducedPipelineNote:
-      "The current product is temporarily set to 10 stages. More stages will be added in later iterations, and the follow-up work is tracked in TODO.md.",
+      "The workflow now includes live retrieval adapters, a Docker sandbox, manuscript sub-pipelines, and stage approval gates.",
     pipelineStages: "Current Stage Plan",
     selectedStageOutput: "Selected Stage Output",
     selectedStagePlaceholder:
       "Run the pipeline to populate stage output. Click any stage card to inspect its content.",
-    sourceGroundingSnapshot: "Source Grounding Snapshot",
+    sourceGroundingSnapshot: "Source Snapshot",
     noExtractedText: "No extracted text yet.",
     white: "White",
     black: "Black",
@@ -156,19 +190,41 @@ const uiCopy = {
     projectCreated: "Project created.",
     localPaperAdded: "Local paper added.",
     remotePaperAdded: "Remote paper added.",
+    literatureImported: "Literature result imported.",
     planGenerated: "Plan generated. Review before starting.",
     planApproved: "Plan approved.",
     runStarted: "Run started.",
+    runPaused: "Run paused.",
+    runResumed: "Run resumed.",
+    gateRejected: "Approval gate rejected.",
+    rollbackComplete: "Run rolled back to the selected gate target.",
     wsConnected: "Live stage updates connected.",
     wsDisconnected: "Live updates disconnected.",
     copyLanUrl: "Copy LAN URL",
     lanUrlCopied: "LAN URL copied.",
     lanUrlCopyFailed: "LAN URL copy failed.",
+    pauseRun: "Pause",
+    resumeRun: "Resume / Approve Gate",
+    rejectGate: "Reject Gate",
+    rollbackGate: "Rollback",
+    activeGate: "Active Gate",
+    noActiveGate: "No active approval gate.",
+    stageContract: "Stage Contract",
+    stageFocus: "Stage Focus",
+    inputs: "Inputs",
+    mustProduce: "Must Produce",
+    qualityBar: "Quality Bar",
+    disallowed: "Disallowed",
+    artifactSchema: "Artifact Schema",
+    artifactSnapshot: "Artifact Snapshot",
+    gateState: "Gate State",
+    stageNotes: "Stage Notes",
+    retrievedVia: "Retrieved via",
   },
   cn: {
     ready: "已就绪。",
-    brandTitle: "带计划审批门的研究工作流 GUI。",
-    brandBody: "从 idea 出发，用论文做 grounding，先审批计划，再在一个界面里追踪整个执行流程。",
+    brandTitle: "带计划门控、真实检索、沙箱执行和审批回路的研究工作流 GUI。",
+    brandBody: "从 idea 出发，用论文做 grounding，先审批计划，再在同一个界面里控制整条分阶段执行链路。",
     backendReady: "后端已就绪",
     backendOffline: "后端离线",
     liveStages: (count: number) => `${count} 个阶段`,
@@ -185,7 +241,7 @@ const uiCopy = {
     noConnectionTest: "还没有连接测试结果。",
     projects: "项目",
     heroEyebrow: "执行前必须先完成 Intake",
-    heroTitle: "先提供 idea、背景、方向和必读论文，再进入计划阶段。",
+    heroTitle: "先提供 idea、方向和必读论文，再经过计划审批与阶段门控，运行才会继续推进。",
     createProject: "创建项目",
     ideaTitle: "Idea / 标题",
     ideaTitlePlaceholder: "输入一个简洁的项目标题",
@@ -205,7 +261,7 @@ const uiCopy = {
     apiBudgetPlaceholder: "$20 / 无硬上限 / 内部额度",
     paperIntake: "论文输入",
     paperIntakeBody:
-      "在生成计划前先添加必读论文。本地 PDF 会解析；URL 会被记录，远程 PDF 会尽量下载和提取。",
+      "在生成计划前，可以添加本地 PDF、远程 URL，或从实时文献检索结果中直接导入。",
     localPdf: "本地 PDF",
     uploadPdf: "上传 PDF",
     remoteUrl: "远程 URL",
@@ -215,6 +271,12 @@ const uiCopy = {
     whySource: "这个来源为什么会影响计划",
     remoteUrlPlaceholder: "arXiv / DOI / PDF / 论文页面",
     addUrlSource: "添加 URL 来源",
+    literatureSearch: "文献发现",
+    literatureSearchPlaceholder: "输入任务 / 方法 / 主题关键词",
+    search: "检索",
+    importResult: "导入",
+    noLiteratureResults: "还没有检索结果。",
+    providerErrors: "Provider 错误",
     planningGate: "计划门控",
     generatePlan: "生成计划",
     approvePlan: "批准计划",
@@ -227,11 +289,11 @@ const uiCopy = {
     started: "开始时间",
     planningGateLabel: "计划门控",
     reducedPipelineNote:
-      "当前产品暂定 10 个 stages，后续会继续扩展更多 stages，相关事项已记录在 TODO.md。",
+      "当前流水线已经包含真实文献检索适配器、Docker 实验沙箱、论文子流水线，以及可暂停/恢复/拒绝/回滚的审批门。",
     pipelineStages: "当前阶段规划",
     selectedStageOutput: "当前阶段输出",
     selectedStagePlaceholder: "运行后这里会出现阶段输出。点击任意阶段卡片即可查看内容。",
-    sourceGroundingSnapshot: "来源论文快照",
+    sourceGroundingSnapshot: "来源快照",
     noExtractedText: "还没有提取文本。",
     white: "白色",
     black: "黑色",
@@ -241,14 +303,36 @@ const uiCopy = {
     projectCreated: "项目已创建。",
     localPaperAdded: "本地论文已添加。",
     remotePaperAdded: "远程论文已添加。",
+    literatureImported: "检索结果已导入。",
     planGenerated: "计划已生成。请先审阅再启动。",
     planApproved: "计划已批准。",
     runStarted: "运行已启动。",
+    runPaused: "运行已暂停。",
+    runResumed: "运行已恢复。",
+    gateRejected: "审批门已拒绝。",
+    rollbackComplete: "已回滚到门控指定阶段。",
     wsConnected: "实时阶段更新已连接。",
     wsDisconnected: "实时更新已断开。",
     copyLanUrl: "复制 LAN URL",
     lanUrlCopied: "LAN URL 已复制。",
     lanUrlCopyFailed: "复制 LAN URL 失败。",
+    pauseRun: "暂停",
+    resumeRun: "恢复 / 通过门控",
+    rejectGate: "拒绝门控",
+    rollbackGate: "回滚",
+    activeGate: "当前审批门",
+    noActiveGate: "当前没有活动审批门。",
+    stageContract: "阶段合同",
+    stageFocus: "阶段焦点",
+    inputs: "输入要求",
+    mustProduce: "必须产出",
+    qualityBar: "质量标准",
+    disallowed: "禁止事项",
+    artifactSchema: "产物 Schema",
+    artifactSnapshot: "产物快照",
+    gateState: "门控状态",
+    stageNotes: "阶段备注",
+    retrievedVia: "检索来源",
   },
 } satisfies Record<LocaleMode, Record<string, string | ((count: number) => string)>>;
 
@@ -279,6 +363,10 @@ type ProjectDetail = {
   latest_run: Run | null;
 };
 
+function prettyJson(value: unknown) {
+  return JSON.stringify(value ?? {}, null, 2);
+}
+
 export default function App() {
   const [locale, setLocale] = useState<LocaleMode>(() => {
     if (typeof window === "undefined") {
@@ -300,6 +388,9 @@ export default function App() {
   const [projectForm, setProjectForm] = useState(emptyProjectForm);
   const [urlPaper, setUrlPaper] = useState({ url: "", title: "", notes: "" });
   const [uploadNotes, setUploadNotes] = useState("");
+  const [literatureQuery, setLiteratureQuery] = useState("");
+  const [literatureResults, setLiteratureResults] = useState<LiteratureResult[]>([]);
+  const [literatureErrors, setLiteratureErrors] = useState<Record<string, string>>({});
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [projectDetail, setProjectDetail] = useState<ProjectDetail | null>(null);
   const [run, setRun] = useState<Run | null>(null);
@@ -341,8 +432,13 @@ export default function App() {
     setSettings(settingsResponse);
     setProjects(projectResponse.projects);
     if (projectResponse.projects[0]) {
-      void loadProject(projectResponse.projects[0].id);
+      await loadProject(projectResponse.projects[0].id);
     }
+  }
+
+  async function refreshProjects() {
+    const response = await api.listProjects();
+    setProjects(response.projects);
   }
 
   async function loadProject(projectId: string) {
@@ -353,14 +449,18 @@ export default function App() {
     setSelectedStageIndex(detail.latest_run?.current_stage_index || 1);
     if (detail.latest_run) {
       const runDetail = await api.getRun(detail.latest_run.id);
+      setRun(runDetail.run);
       setRunStages(runDetail.stages);
+      setSelectedStageIndex(runDetail.run.current_stage_index || 1);
     } else {
       setRunStages([]);
+      setSelectedStageIndex(1);
     }
+    await refreshProjects();
   }
 
   useEffect(() => {
-    if (!run || run.status !== "running") {
+    if (!run || !activeRunStatuses.has(run.status)) {
       return;
     }
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
@@ -369,7 +469,7 @@ export default function App() {
       const payload = JSON.parse(event.data) as { run: Run; stages: RunStage[] };
       setRun(payload.run);
       setRunStages(payload.stages);
-      setSelectedStageIndex(payload.run.current_stage_index || 1);
+      setSelectedStageIndex(payload.run.pending_gate_index || payload.run.current_stage_index || 1);
     };
     socket.onopen = () => setConnectionMessage(text.wsConnected);
     socket.onclose = () => setConnectionMessage(text.wsDisconnected);
@@ -380,7 +480,7 @@ export default function App() {
       clearInterval(heartbeat);
       socket.close();
     };
-  }, [run?.id, run?.status]);
+  }, [run?.id, run?.status, text.wsConnected, text.wsDisconnected]);
 
   const selectedStage = useMemo(
     () => runStages.find((item) => item.stage_index === selectedStageIndex),
@@ -402,6 +502,19 @@ export default function App() {
     [locale, stageCatalog],
   );
 
+  const selectedStageDefinition = useMemo(
+    () => localizedStageCatalog.find((stage) => stage.index === selectedStageIndex) ?? null,
+    [localizedStageCatalog, selectedStageIndex],
+  );
+
+  const activeGateStage = useMemo(
+    () =>
+      localizedStageCatalog.find((stage) => stage.key === run?.pending_gate_key) ??
+      localizedStageCatalog.find((stage) => stage.index === run?.pending_gate_index) ??
+      null,
+    [localizedStageCatalog, run?.pending_gate_index, run?.pending_gate_key],
+  );
+
   async function handleSaveSettings() {
     const saved = await api.saveSettings(settings);
     setSettings(saved);
@@ -416,8 +529,6 @@ export default function App() {
   async function handleCreateProject(event: React.FormEvent) {
     event.preventDefault();
     const created = await api.createProject(projectForm);
-    const projectList = await api.listProjects();
-    setProjects(projectList.projects);
     setProjectForm(emptyProjectForm);
     setStatusMessage(text.projectCreated);
     await loadProject(created.project.id);
@@ -442,6 +553,7 @@ export default function App() {
     setUploadNotes("");
     event.currentTarget.reset();
     setStatusMessage(text.localPaperAdded);
+    await refreshProjects();
   }
 
   async function handleAddPaperUrl(event: React.FormEvent) {
@@ -460,6 +572,40 @@ export default function App() {
     );
     setUrlPaper({ url: "", title: "", notes: "" });
     setStatusMessage(text.remotePaperAdded);
+    await refreshProjects();
+  }
+
+  async function handleSearchLiterature(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selectedProjectId || !literatureQuery.trim()) {
+      return;
+    }
+    const response = await api.searchLiterature(selectedProjectId, {
+      query: literatureQuery,
+      limit_per_provider: 3,
+    });
+    setLiteratureResults(response.results);
+    setLiteratureErrors(response.errors);
+  }
+
+  async function handleImportLiterature(result: LiteratureResult) {
+    if (!selectedProjectId) {
+      return;
+    }
+    const response = await api.importLiteratureResult(selectedProjectId, {
+      ...result,
+      notes: `${text.retrievedVia}: ${result.provider}`,
+    });
+    setProjectDetail((current) =>
+      current
+        ? {
+            ...current,
+            papers: response.papers,
+          }
+        : current,
+    );
+    setStatusMessage(text.literatureImported);
+    await refreshProjects();
   }
 
   async function handleGeneratePlan() {
@@ -469,6 +615,7 @@ export default function App() {
     const result = await api.generatePlan(selectedProjectId);
     setProjectDetail((current) => (current ? { ...current, plan: result.plan } : current));
     setStatusMessage(text.planGenerated);
+    await refreshProjects();
   }
 
   async function handleApprovePlan() {
@@ -478,6 +625,7 @@ export default function App() {
     const result = await api.approvePlan(selectedProjectId);
     setProjectDetail((current) => (current ? { ...current, plan: result.plan } : current));
     setStatusMessage(text.planApproved);
+    await refreshProjects();
   }
 
   async function handleStartRun() {
@@ -489,6 +637,52 @@ export default function App() {
     setRunStages(result.stages);
     setSelectedStageIndex(1);
     setStatusMessage(text.runStarted);
+    await refreshProjects();
+  }
+
+  async function handlePauseRun() {
+    if (!run) {
+      return;
+    }
+    const result = await api.pauseRun(run.id);
+    setRun(result.run);
+    setRunStages(result.stages);
+    setStatusMessage(text.runPaused);
+    await refreshProjects();
+  }
+
+  async function handleResumeRun() {
+    if (!run) {
+      return;
+    }
+    const result = await api.resumeRun(run.id);
+    setRun(result.run);
+    setRunStages(result.stages);
+    setStatusMessage(text.runResumed);
+    await refreshProjects();
+  }
+
+  async function handleRejectGate() {
+    if (!run) {
+      return;
+    }
+    const result = await api.rejectRun(run.id);
+    setRun(result.run);
+    setRunStages(result.stages);
+    setStatusMessage(text.gateRejected);
+    await refreshProjects();
+  }
+
+  async function handleRollbackRun() {
+    if (!run) {
+      return;
+    }
+    const result = await api.rollbackRun(run.id);
+    setRun(result.run);
+    setRunStages(result.stages);
+    setSelectedStageIndex(result.run.current_stage_index || 1);
+    setStatusMessage(text.rollbackComplete);
+    await refreshProjects();
   }
 
   function preferredLanUrl(info: RuntimeInfo | null): string | null {
@@ -541,6 +735,10 @@ export default function App() {
   const approvalReady = projectDetail?.plan?.status === "ready";
   const runReady = projectDetail?.plan?.status === "approved";
   const lanCopyTarget = preferredLanUrl(runtimeInfo);
+  const canPause = run?.status === "running";
+  const canResume = run ? run.status === "paused" || run.status === "awaiting_approval" : false;
+  const canReject = run?.status === "awaiting_approval";
+  const canRollback = run?.status === "awaiting_approval";
 
   return (
     <div className="page-shell">
@@ -595,370 +793,491 @@ export default function App() {
 
       <div className="app-shell">
         <aside className="left-rail">
-        <section className="brand-card">
-          <span className="eyebrow">Auto Research Pro Max</span>
-          <h1>{text.brandTitle}</h1>
-          <p>{text.brandBody}</p>
-          <div className="meta-row">
-            <span>{health?.status === "ok" ? text.backendReady : text.backendOffline}</span>
-            <span>{text.liveStages(health?.stage_count ?? 0)}</span>
-          </div>
-        </section>
+          <section className="brand-card">
+            <span className="eyebrow">Auto Research Pro Max</span>
+            <h1>{text.brandTitle}</h1>
+            <p>{text.brandBody}</p>
+            <div className="meta-row">
+              <span>{health?.status === "ok" ? text.backendReady : text.backendOffline}</span>
+              <span>{text.liveStages(health?.stage_count ?? 0)}</span>
+            </div>
+          </section>
 
-        <section className="panel">
-          <div className="panel-header">
-            <h2>{text.setup}</h2>
-            <button onClick={handleSaveSettings} type="button">
-              {text.save}
-            </button>
-          </div>
-          <label>
-            {text.apiKey}
-            <input
-              type="password"
-              value={settings.api_key}
-              onChange={(event) => setSettings({ ...settings, api_key: event.target.value })}
-              placeholder="sk-..."
-            />
-          </label>
-          <label>
-            Base URL
-            <input
-              value={settings.base_url}
-              onChange={(event) => setSettings({ ...settings, base_url: event.target.value })}
-            />
-          </label>
-          <label>
-            {text.researchModel}
-            <input
-              value={settings.research_model}
-              onChange={(event) => setSettings({ ...settings, research_model: event.target.value })}
-              placeholder="gpt-5.4"
-            />
-          </label>
-          <label>
-            {text.codeModel}
-            <input
-              value={settings.code_model}
-              onChange={(event) => setSettings({ ...settings, code_model: event.target.value })}
-              placeholder="gpt-5.4"
-            />
-          </label>
-          <label>
-            {text.embeddingModel}
-            <input
-              value={settings.embedding_model}
-              onChange={(event) =>
-                setSettings({ ...settings, embedding_model: event.target.value })
-              }
-              placeholder={text.optional}
-            />
-          </label>
-          <label>
-            {text.notes}
-            <textarea
-              value={settings.notes}
-              onChange={(event) => setSettings({ ...settings, notes: event.target.value })}
-              placeholder={text.notesPlaceholder}
-            />
-          </label>
-          <button className="secondary" onClick={handleTestSettings} type="button">
-            {text.testConnection}
-          </button>
-          <p className="muted">{connectionMessage || text.noConnectionTest}</p>
-        </section>
-
-        <section className="panel">
-          <div className="panel-header">
-            <h2>{text.projects}</h2>
-          </div>
-          <div className="project-list">
-            {projects.map((project) => (
-              <button
-                key={project.id}
-                className={`project-chip ${selectedProjectId === project.id ? "selected" : ""}`}
-                onClick={() => void loadProject(project.id)}
-                type="button"
-              >
-                <strong>{project.title}</strong>
-                <span>{project.status}</span>
+          <section className="panel">
+            <div className="panel-header">
+              <h2>{text.setup}</h2>
+              <button onClick={handleSaveSettings} type="button">
+                {text.save}
               </button>
-            ))}
-          </div>
-        </section>
+            </div>
+            <label>
+              {text.apiKey}
+              <input
+                type="password"
+                value={settings.api_key}
+                onChange={(event) => setSettings({ ...settings, api_key: event.target.value })}
+                placeholder="sk-..."
+              />
+            </label>
+            <label>
+              Base URL
+              <input
+                value={settings.base_url}
+                onChange={(event) => setSettings({ ...settings, base_url: event.target.value })}
+              />
+            </label>
+            <label>
+              {text.researchModel}
+              <input
+                value={settings.research_model}
+                onChange={(event) => setSettings({ ...settings, research_model: event.target.value })}
+                placeholder="gpt-5.4"
+              />
+            </label>
+            <label>
+              {text.codeModel}
+              <input
+                value={settings.code_model}
+                onChange={(event) => setSettings({ ...settings, code_model: event.target.value })}
+                placeholder="gpt-5.4"
+              />
+            </label>
+            <label>
+              {text.embeddingModel}
+              <input
+                value={settings.embedding_model}
+                onChange={(event) => setSettings({ ...settings, embedding_model: event.target.value })}
+                placeholder={text.optional}
+              />
+            </label>
+            <label>
+              {text.notes}
+              <textarea
+                value={settings.notes}
+                onChange={(event) => setSettings({ ...settings, notes: event.target.value })}
+                placeholder={text.notesPlaceholder}
+              />
+            </label>
+            <button className="secondary" onClick={handleTestSettings} type="button">
+              {text.testConnection}
+            </button>
+            <p className="muted">{connectionMessage || text.noConnectionTest}</p>
+          </section>
+
+          <section className="panel">
+            <div className="panel-header">
+              <h2>{text.projects}</h2>
+            </div>
+            <div className="project-list">
+              {projects.map((project) => (
+                <button
+                  key={project.id}
+                  className={`project-chip ${selectedProjectId === project.id ? "selected" : ""}`}
+                  onClick={() => void loadProject(project.id)}
+                  type="button"
+                >
+                  <strong>{project.title}</strong>
+                  <span>{project.status}</span>
+                </button>
+              ))}
+            </div>
+          </section>
         </aside>
 
         <main className="main-column">
-        <section className="grid two-up">
-          <form className="panel" onSubmit={handleCreateProject}>
-            <div className="panel-header">
-              <h2>{text.createProject}</h2>
-            </div>
-            <label>
-              <span className="field-label">
-                <span>{text.ideaTitle}</span>
-                <span className="required-mark">*</span>
-              </span>
-              <input
-                required
-                value={projectForm.title}
-                onChange={(event) =>
-                  setProjectForm({ ...projectForm, title: event.target.value })
-                }
-                placeholder={text.ideaTitlePlaceholder}
-              />
-            </label>
-            <label>
-              <span className="field-label">
-                <span>{text.researchIdea}</span>
-                <span className="required-mark">*</span>
-              </span>
-              <textarea
-                required
-                value={projectForm.idea}
-                onChange={(event) => setProjectForm({ ...projectForm, idea: event.target.value })}
-                placeholder={text.researchIdeaPlaceholder}
-              />
-            </label>
-            <label>
-              <span className="field-label">
-                <span>{text.background}</span>
-                <span className="required-mark">*</span>
-              </span>
-              <textarea
-                required
-                value={projectForm.background}
-                onChange={(event) =>
-                  setProjectForm({ ...projectForm, background: event.target.value })
-                }
-                placeholder={text.backgroundPlaceholder}
-              />
-            </label>
-            <label>
-              <span className="field-label">
-                <span>{text.direction}</span>
-                <span className="required-mark">*</span>
-              </span>
-              <textarea
-                required
-                value={projectForm.direction}
-                onChange={(event) =>
-                  setProjectForm({ ...projectForm, direction: event.target.value })
-                }
-                placeholder={text.directionPlaceholder}
-              />
-            </label>
-            <label>
-              <span className="field-label">
-                <span>{text.goals}</span>
-                <span className="required-mark">*</span>
-              </span>
-              <textarea
-                required
-                value={projectForm.goals}
-                onChange={(event) =>
-                  setProjectForm({ ...projectForm, goals: event.target.value })
-                }
-                placeholder={text.goalsPlaceholder}
-              />
-            </label>
-            <label>
-              {text.constraints}
-              <textarea
-                value={projectForm.constraints_text}
-                onChange={(event) =>
-                  setProjectForm({ ...projectForm, constraints_text: event.target.value })
-                }
-                placeholder={text.constraintsPlaceholder}
-              />
-            </label>
-            <div className="split-fields">
-              <label>
-                {text.computeBudget}
-                <input
-                  value={projectForm.compute_budget}
-                  onChange={(event) =>
-                    setProjectForm({ ...projectForm, compute_budget: event.target.value })
-                  }
-                  placeholder={text.computeBudgetPlaceholder}
-                />
-              </label>
-              <label>
-                {text.apiBudget}
-                <input
-                  value={projectForm.api_budget}
-                  onChange={(event) =>
-                    setProjectForm({ ...projectForm, api_budget: event.target.value })
-                  }
-                  placeholder={text.apiBudgetPlaceholder}
-                />
-              </label>
-            </div>
-            <button type="submit">{text.createProject}</button>
-          </form>
-
-          <section className="panel">
-            <div className="panel-header">
-              <h2>{text.paperIntake}</h2>
-            </div>
-            <p className="muted">{text.paperIntakeBody}</p>
-            <form className="stacked-form" onSubmit={handleUploadPaper}>
-              <label>
-                {text.localPdf}
-                <input name="paper" type="file" accept=".pdf" />
-              </label>
-              <label>
-                {text.notes}
-                <input
-                  value={uploadNotes}
-                  onChange={(event) => setUploadNotes(event.target.value)}
-                  placeholder={text.whyPaper}
-                />
-              </label>
-              <button disabled={!selectedProjectId} type="submit">
-                {text.uploadPdf}
-              </button>
-            </form>
-            <form className="stacked-form" onSubmit={handleAddPaperUrl}>
-              <label>
-                {text.remoteUrl}
-                <input
-                  value={urlPaper.url}
-                  onChange={(event) => setUrlPaper({ ...urlPaper, url: event.target.value })}
-                  placeholder={text.remoteUrlPlaceholder}
-                />
-              </label>
-              <label>
-                {text.title}
-                <input
-                  value={urlPaper.title}
-                  onChange={(event) => setUrlPaper({ ...urlPaper, title: event.target.value })}
-                  placeholder={text.titlePlaceholder}
-                />
-              </label>
-              <label>
-                {text.notes}
-                <input
-                  value={urlPaper.notes}
-                  onChange={(event) => setUrlPaper({ ...urlPaper, notes: event.target.value })}
-                  placeholder={text.whySource}
-                />
-              </label>
-              <button disabled={!selectedProjectId} type="submit">
-                {text.addUrlSource}
-              </button>
-            </form>
-            <div className="paper-list">
-              {(projectDetail?.papers ?? []).map((paper) => (
-                <article key={paper.id} className="paper-card">
-                  <strong>{paper.title}</strong>
-                  <span>{paper.source_type}</span>
-                  {paper.url ? <a href={paper.url}>{paper.url}</a> : null}
-                  {paper.notes ? <p>{paper.notes}</p> : null}
-                </article>
-              ))}
-            </div>
-          </section>
-        </section>
-
-        <section className="grid two-up">
-          <section className="panel">
-            <div className="panel-header">
-              <h2>{text.planningGate}</h2>
-              <div className="inline-actions">
-                <button disabled={!selectedProjectId} onClick={handleGeneratePlan} type="button">
-                  {text.generatePlan}
-                </button>
-                <button disabled={!approvalReady} onClick={handleApprovePlan} type="button">
-                  {text.approvePlan}
-                </button>
-                <button disabled={!runReady} onClick={handleStartRun} type="button">
-                  {text.startRun}
-                </button>
+          <section className="grid two-up">
+            <form className="panel" onSubmit={handleCreateProject}>
+              <div className="panel-header">
+                <h2>{text.createProject}</h2>
               </div>
-            </div>
-            <div className="markdown-surface">
-              <ReactMarkdown>
-                {projectDetail?.plan?.plan_markdown ??
-                  text.noPlanYet}
-              </ReactMarkdown>
-            </div>
+              <label>
+                <span className="field-label">
+                  <span>{text.ideaTitle}</span>
+                  <span className="required-mark">*</span>
+                </span>
+                <input
+                  required
+                  value={projectForm.title}
+                  onChange={(event) => setProjectForm({ ...projectForm, title: event.target.value })}
+                  placeholder={text.ideaTitlePlaceholder}
+                />
+              </label>
+              <label>
+                <span className="field-label">
+                  <span>{text.researchIdea}</span>
+                  <span className="required-mark">*</span>
+                </span>
+                <textarea
+                  required
+                  value={projectForm.idea}
+                  onChange={(event) => setProjectForm({ ...projectForm, idea: event.target.value })}
+                  placeholder={text.researchIdeaPlaceholder}
+                />
+              </label>
+              <label>
+                <span className="field-label">
+                  <span>{text.background}</span>
+                  <span className="required-mark">*</span>
+                </span>
+                <textarea
+                  required
+                  value={projectForm.background}
+                  onChange={(event) => setProjectForm({ ...projectForm, background: event.target.value })}
+                  placeholder={text.backgroundPlaceholder}
+                />
+              </label>
+              <label>
+                <span className="field-label">
+                  <span>{text.direction}</span>
+                  <span className="required-mark">*</span>
+                </span>
+                <textarea
+                  required
+                  value={projectForm.direction}
+                  onChange={(event) => setProjectForm({ ...projectForm, direction: event.target.value })}
+                  placeholder={text.directionPlaceholder}
+                />
+              </label>
+              <label>
+                <span className="field-label">
+                  <span>{text.goals}</span>
+                  <span className="required-mark">*</span>
+                </span>
+                <textarea
+                  required
+                  value={projectForm.goals}
+                  onChange={(event) => setProjectForm({ ...projectForm, goals: event.target.value })}
+                  placeholder={text.goalsPlaceholder}
+                />
+              </label>
+              <label>
+                {text.constraints}
+                <textarea
+                  value={projectForm.constraints_text}
+                  onChange={(event) =>
+                    setProjectForm({ ...projectForm, constraints_text: event.target.value })
+                  }
+                  placeholder={text.constraintsPlaceholder}
+                />
+              </label>
+              <div className="split-fields">
+                <label>
+                  {text.computeBudget}
+                  <input
+                    value={projectForm.compute_budget}
+                    onChange={(event) =>
+                      setProjectForm({ ...projectForm, compute_budget: event.target.value })
+                    }
+                    placeholder={text.computeBudgetPlaceholder}
+                  />
+                </label>
+                <label>
+                  {text.apiBudget}
+                  <input
+                    value={projectForm.api_budget}
+                    onChange={(event) =>
+                      setProjectForm({ ...projectForm, api_budget: event.target.value })
+                    }
+                    placeholder={text.apiBudgetPlaceholder}
+                  />
+                </label>
+              </div>
+              <button type="submit">{text.createProject}</button>
+            </form>
+
+            <section className="panel">
+              <div className="panel-header">
+                <h2>{text.paperIntake}</h2>
+              </div>
+              <p className="muted">{text.paperIntakeBody}</p>
+              <form className="stacked-form" onSubmit={handleUploadPaper}>
+                <label>
+                  {text.localPdf}
+                  <input name="paper" type="file" accept=".pdf" />
+                </label>
+                <label>
+                  {text.notes}
+                  <input
+                    value={uploadNotes}
+                    onChange={(event) => setUploadNotes(event.target.value)}
+                    placeholder={text.whyPaper}
+                  />
+                </label>
+                <button disabled={!selectedProjectId} type="submit">
+                  {text.uploadPdf}
+                </button>
+              </form>
+              <form className="stacked-form" onSubmit={handleAddPaperUrl}>
+                <label>
+                  {text.remoteUrl}
+                  <input
+                    value={urlPaper.url}
+                    onChange={(event) => setUrlPaper({ ...urlPaper, url: event.target.value })}
+                    placeholder={text.remoteUrlPlaceholder}
+                  />
+                </label>
+                <label>
+                  {text.title}
+                  <input
+                    value={urlPaper.title}
+                    onChange={(event) => setUrlPaper({ ...urlPaper, title: event.target.value })}
+                    placeholder={text.titlePlaceholder}
+                  />
+                </label>
+                <label>
+                  {text.notes}
+                  <input
+                    value={urlPaper.notes}
+                    onChange={(event) => setUrlPaper({ ...urlPaper, notes: event.target.value })}
+                    placeholder={text.whySource}
+                  />
+                </label>
+                <button disabled={!selectedProjectId} type="submit">
+                  {text.addUrlSource}
+                </button>
+              </form>
+              <form className="stacked-form" onSubmit={handleSearchLiterature}>
+                <label>
+                  {text.literatureSearch}
+                  <input
+                    value={literatureQuery}
+                    onChange={(event) => setLiteratureQuery(event.target.value)}
+                    placeholder={text.literatureSearchPlaceholder}
+                  />
+                </label>
+                <button disabled={!selectedProjectId} type="submit">
+                  {text.search}
+                </button>
+              </form>
+              <div className="paper-list">
+                {literatureResults.length === 0 ? (
+                  <p className="muted">{text.noLiteratureResults}</p>
+                ) : null}
+                {Object.entries(literatureErrors).map(([provider, error]) => (
+                  <article key={`error-${provider}`} className="paper-card">
+                    <strong>{text.providerErrors}</strong>
+                    <span>{provider}</span>
+                    <p>{error}</p>
+                  </article>
+                ))}
+                {literatureResults.map((result) => (
+                  <article key={`${result.provider}-${result.canonical_key}`} className="paper-card">
+                    <strong>{result.title}</strong>
+                    <span>
+                      {result.provider} · {result.year || "n/a"} · {result.venue || "n/a"}
+                    </span>
+                    {result.url ? (
+                      <a href={result.url} rel="noreferrer" target="_blank">
+                        {result.url}
+                      </a>
+                    ) : null}
+                    {result.abstract ? <p>{result.abstract.slice(0, 220)}</p> : null}
+                    <button
+                      className="secondary"
+                      onClick={() => void handleImportLiterature(result)}
+                      type="button"
+                    >
+                      {text.importResult}
+                    </button>
+                  </article>
+                ))}
+              </div>
+              <div className="paper-list">
+                {(projectDetail?.papers ?? []).map((paper) => (
+                  <article key={paper.id} className="paper-card">
+                    <strong>{paper.title}</strong>
+                    <span>
+                      {paper.source_type} · {paper.year || "n/a"} · {paper.venue || "n/a"}
+                    </span>
+                    {paper.url ? (
+                      <a href={paper.url} rel="noreferrer" target="_blank">
+                        {paper.url}
+                      </a>
+                    ) : null}
+                    {paper.notes ? <p>{paper.notes}</p> : null}
+                  </article>
+                ))}
+              </div>
+            </section>
           </section>
 
-          <section className="panel">
-            <div className="panel-header">
-              <h2>{text.runSummary}</h2>
-            </div>
-            {run ? (
-              <div className="run-meta">
-                <div>
-                  <span className="metric-label">{text.runStatus}</span>
-                  <strong>{run.status}</strong>
-                </div>
-                <div>
-                  <span className="metric-label">{text.currentStage}</span>
-                  <strong>
-                    {run.current_stage_index}/{run.total_stages}
-                  </strong>
-                </div>
-                <div>
-                  <span className="metric-label">{text.started}</span>
-                  <strong>{new Date(run.started_at).toLocaleString()}</strong>
+          <section className="grid two-up">
+            <section className="panel">
+              <div className="panel-header">
+                <h2>{text.planningGate}</h2>
+                <div className="inline-actions">
+                  <button disabled={!selectedProjectId} onClick={handleGeneratePlan} type="button">
+                    {text.generatePlan}
+                  </button>
+                  <button disabled={!approvalReady} onClick={handleApprovePlan} type="button">
+                    {text.approvePlan}
+                  </button>
+                  <button disabled={!runReady} onClick={handleStartRun} type="button">
+                    {text.startRun}
+                  </button>
                 </div>
               </div>
-            ) : (
-              <p className="muted">{text.noRun}</p>
-            )}
-            <div className="preflight-banner">
-              <span>{text.planningGateLabel}</span>
-              <strong>{projectDetail?.plan?.status ?? "missing"}</strong>
-            </div>
-            <p className="muted">{text.reducedPipelineNote}</p>
-          </section>
-        </section>
+              <div className="markdown-surface">
+                <ReactMarkdown>{projectDetail?.plan?.plan_markdown ?? text.noPlanYet}</ReactMarkdown>
+              </div>
+            </section>
 
-        <section className="panel">
-          <div className="panel-header">
-            <h2>{text.pipelineStages}</h2>
-          </div>
-          <StageTimeline
-            catalog={localizedStageCatalog}
-            locale={locale}
-            runStages={runStages}
-            currentStage={run?.current_stage_index ?? 0}
-            onSelect={setSelectedStageIndex}
-            selectedIndex={selectedStageIndex}
-          />
-        </section>
-
-        <section className="grid detail-grid">
-          <section className="panel">
-            <div className="panel-header">
-              <h2>{text.selectedStageOutput}</h2>
-            </div>
-            <div className="markdown-surface">
-              <ReactMarkdown>
-                {selectedStage?.content_md ??
-                  text.selectedStagePlaceholder}
-              </ReactMarkdown>
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="panel-header">
-              <h2>{text.sourceGroundingSnapshot}</h2>
-            </div>
-            <div className="snapshot-list">
-              {(projectDetail?.papers ?? []).map((paper) => (
-                <div key={paper.id} className="snapshot-item">
-                  <strong>{paper.title}</strong>
-                  <span>{paper.source_type}</span>
-                  <p>{paper.extracted_text?.slice(0, 240) || text.noExtractedText}</p>
+            <section className="panel">
+              <div className="panel-header">
+                <h2>{text.runSummary}</h2>
+                <div className="inline-actions">
+                  <button disabled={!canPause} onClick={handlePauseRun} type="button">
+                    {text.pauseRun}
+                  </button>
+                  <button disabled={!canResume} onClick={handleResumeRun} type="button">
+                    {text.resumeRun}
+                  </button>
+                  <button disabled={!canReject} onClick={handleRejectGate} type="button">
+                    {text.rejectGate}
+                  </button>
+                  <button disabled={!canRollback} onClick={handleRollbackRun} type="button">
+                    {text.rollbackGate}
+                  </button>
                 </div>
-              ))}
-            </div>
+              </div>
+              {run ? (
+                <div className="run-meta">
+                  <div>
+                    <span className="metric-label">{text.runStatus}</span>
+                    <strong>{run.status}</strong>
+                  </div>
+                  <div>
+                    <span className="metric-label">{text.currentStage}</span>
+                    <strong>
+                      {run.current_stage_index}/{run.total_stages}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="metric-label">{text.started}</span>
+                    <strong>{new Date(run.started_at).toLocaleString()}</strong>
+                  </div>
+                </div>
+              ) : (
+                <p className="muted">{text.noRun}</p>
+              )}
+              <div className="preflight-banner">
+                <span>{text.planningGateLabel}</span>
+                <strong>{projectDetail?.plan?.status ?? "missing"}</strong>
+              </div>
+              <div className="gate-panel">
+                <span className="metric-label">{text.activeGate}</span>
+                <strong>{activeGateStage?.approval_gate?.label ?? text.noActiveGate}</strong>
+                {activeGateStage?.approval_gate?.summary ? (
+                  <p className="muted">{activeGateStage.approval_gate.summary}</p>
+                ) : null}
+                {run?.pending_gate_state ? (
+                  <p className="muted">
+                    {text.gateState}: {run.pending_gate_state}
+                  </p>
+                ) : null}
+              </div>
+              <p className="muted">{text.reducedPipelineNote}</p>
+            </section>
           </section>
-        </section>
+
+          <section className="panel">
+            <div className="panel-header">
+              <h2>{text.pipelineStages}</h2>
+            </div>
+            <StageTimeline
+              catalog={localizedStageCatalog}
+              locale={locale}
+              runStages={runStages}
+              currentStage={run?.pending_gate_index || run?.current_stage_index || 0}
+              onSelect={setSelectedStageIndex}
+              selectedIndex={selectedStageIndex}
+            />
+          </section>
+
+          <section className="grid detail-grid">
+            <section className="panel">
+              <div className="panel-header">
+                <h2>{text.selectedStageOutput}</h2>
+              </div>
+              <div className="markdown-surface">
+                <ReactMarkdown>{selectedStage?.content_md ?? text.selectedStagePlaceholder}</ReactMarkdown>
+              </div>
+              <div className="detail-stack">
+                <div className="detail-block">
+                  <h3>{text.stageNotes}</h3>
+                  <p>{selectedStage?.notes || text.selectedStagePlaceholder}</p>
+                </div>
+                <div className="detail-block">
+                  <h3>{text.stageContract}</h3>
+                  <p className="muted">{selectedStageDefinition?.prompt_focus ?? ""}</p>
+                  <strong>{text.inputs}</strong>
+                  <ul className="contract-list">
+                    {(selectedStageDefinition?.contract.inputs ?? selectedStage?.contract_json.inputs ?? []).map((item) => (
+                      <li key={`input-${item}`}>{item}</li>
+                    ))}
+                  </ul>
+                  <strong>{text.mustProduce}</strong>
+                  <ul className="contract-list">
+                    {(selectedStageDefinition?.contract.must_produce ??
+                      selectedStage?.contract_json.must_produce ??
+                      []).map((item) => (
+                      <li key={`produce-${item}`}>{item}</li>
+                    ))}
+                  </ul>
+                  <strong>{text.qualityBar}</strong>
+                  <ul className="contract-list">
+                    {(selectedStageDefinition?.contract.quality_bar ??
+                      selectedStage?.contract_json.quality_bar ??
+                      []).map((item) => (
+                      <li key={`quality-${item}`}>{item}</li>
+                    ))}
+                  </ul>
+                  <strong>{text.disallowed}</strong>
+                  <ul className="contract-list">
+                    {(selectedStageDefinition?.contract.disallowed ??
+                      selectedStage?.contract_json.disallowed ??
+                      []).map((item) => (
+                      <li key={`blocked-${item}`}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="detail-block">
+                  <h3>{text.artifactSchema}</h3>
+                  {(selectedStageDefinition?.artifact_schema ?? selectedStage?.artifact_schema_json ?? []).map((item) => (
+                    <div key={item.key} className="artifact-item">
+                      <strong>{item.label}</strong>
+                      <span>
+                        {item.type} · {item.required ? "required" : "optional"}
+                      </span>
+                      <p>{item.description}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="detail-block">
+                  <h3>{text.artifactSnapshot}</h3>
+                  <pre className="json-surface">{prettyJson(selectedStage?.artifact_json)}</pre>
+                </div>
+              </div>
+            </section>
+
+            <section className="panel">
+              <div className="panel-header">
+                <h2>{text.sourceGroundingSnapshot}</h2>
+              </div>
+              <div className="snapshot-list">
+                {(projectDetail?.papers ?? []).map((paper) => (
+                  <div key={paper.id} className="snapshot-item">
+                    <strong>{paper.title}</strong>
+                    <span>
+                      {paper.source_type} · {paper.year || "n/a"} · {paper.venue || "n/a"}
+                    </span>
+                    {paper.authors_json?.length ? <p>{paper.authors_json.slice(0, 4).join(", ")}</p> : null}
+                    <p>{paper.extracted_text?.slice(0, 260) || paper.abstract?.slice(0, 260) || text.noExtractedText}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </section>
         </main>
       </div>
     </div>

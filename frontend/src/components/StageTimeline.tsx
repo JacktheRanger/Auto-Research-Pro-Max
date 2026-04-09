@@ -31,6 +31,19 @@ const statusLabel: Record<"en" | "cn", Record<string, string>> = {
   },
 };
 
+const gateLabel: Record<"en" | "cn", Record<string, string>> = {
+  en: {
+    pending: "gate pending",
+    approved: "gate approved",
+    rejected: "gate rejected",
+  },
+  cn: {
+    pending: "门控待审批",
+    approved: "门控已通过",
+    rejected: "门控已拒绝",
+  },
+};
+
 export function StageTimeline({
   catalog,
   locale,
@@ -46,6 +59,8 @@ export function StageTimeline({
         const status = progress?.status ?? "pending";
         const isActive = stage.index === currentStage;
         const isSelected = stage.index === selectedIndex;
+        const gateState = progress?.gate_status ?? "";
+        const approvalRequired = stage.approval_gate || progress?.approval_required;
         return (
           <button
             key={stage.key}
@@ -59,6 +74,11 @@ export function StageTimeline({
             </div>
             <h3>{stage.label}</h3>
             <p>{stage.summary}</p>
+            {approvalRequired ? (
+              <span className={`stage-gate gate-${gateState || "idle"}`}>
+                {gateState ? gateLabel[locale][gateState] ?? gateState : stage.approval_gate?.label ?? progress?.approval_label}
+              </span>
+            ) : null}
             <span className="stage-owner">{stage.owner}</span>
           </button>
         );

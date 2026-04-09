@@ -31,7 +31,15 @@ export type Paper = {
   file_name: string;
   stored_path: string;
   notes: string;
+  abstract: string;
+  doi: string;
+  venue: string;
+  year: number;
+  authors_json: string[];
+  source_provider: string;
+  external_id: string;
   extracted_text: string;
+  metadata_json: Record<string, unknown>;
   created_at: string;
 };
 
@@ -39,6 +47,7 @@ export type Plan = {
   project_id: string;
   status: string;
   plan_markdown: string;
+  metadata_json: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 };
@@ -49,10 +58,35 @@ export type Run = {
   status: string;
   current_stage_index: number;
   total_stages: number;
+  pending_gate_index: number;
+  pending_gate_key: string;
+  pending_gate_state: string;
   started_at: string;
   updated_at: string;
   finished_at: string;
   error: string;
+  metadata_json: Record<string, unknown>;
+};
+
+export type StageContract = {
+  inputs: string[];
+  must_produce: string[];
+  quality_bar: string[];
+  disallowed: string[];
+};
+
+export type ArtifactSchemaItem = {
+  key: string;
+  label: string;
+  type: string;
+  description: string;
+  required: boolean;
+};
+
+export type ApprovalGate = {
+  label: string;
+  summary: string;
+  rollback_to_stage_key: string;
 };
 
 export type StageCatalogItem = {
@@ -61,6 +95,10 @@ export type StageCatalogItem = {
   label: string;
   summary: string;
   owner: string;
+  prompt_focus: string;
+  contract: StageContract;
+  artifact_schema: ArtifactSchemaItem[];
+  approval_gate: ApprovalGate | null;
 };
 
 export type RunStage = {
@@ -73,6 +111,15 @@ export type RunStage = {
   content_md: string;
   started_at: string;
   completed_at: string;
+  contract_json: StageContract;
+  artifact_schema_json: ArtifactSchemaItem[];
+  artifact_json: Record<string, unknown>;
+  gate_status: string;
+  approval_required: number;
+  approval_label: string;
+  rollback_target_index: number;
+  error: string;
+  metadata_json: Record<string, unknown>;
 };
 
 export type RuntimeInfo = {
@@ -81,6 +128,29 @@ export type RuntimeInfo = {
   mode: string;
   local_url: string;
   lan_urls: string[];
+};
+
+export type LiteratureResult = {
+  provider: string;
+  title: string;
+  abstract: string;
+  year: number;
+  venue: string;
+  authors: string[];
+  doi: string;
+  url: string;
+  pdf_url: string;
+  external_id: string;
+  citation_count: number;
+  metadata: Record<string, unknown>;
+  canonical_key: string;
+};
+
+export type LiteratureSearchResponse = {
+  query: string;
+  provider_results: Record<string, LiteratureResult[]>;
+  results: LiteratureResult[];
+  errors: Record<string, string>;
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -144,6 +214,19 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  searchLiterature: (projectId: string, payload: { query: string; limit_per_provider?: number }) =>
+    request<LiteratureSearchResponse>(`/api/projects/${projectId}/literature/search`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  importLiteratureResult: (
+    projectId: string,
+    payload: LiteratureResult & { notes?: string },
+  ) =>
+    request<{ paper: Paper; papers: Paper[] }>(`/api/projects/${projectId}/papers/import`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   generatePlan: (projectId: string) =>
     request<{ plan: Plan }>(`/api/projects/${projectId}/plan/generate`, {
       method: "POST",
@@ -157,4 +240,20 @@ export const api = {
       method: "POST",
     }),
   getRun: (runId: string) => request<{ run: Run; stages: RunStage[] }>(`/api/runs/${runId}`),
+  pauseRun: (runId: string) =>
+    request<{ run: Run; stages: RunStage[] }>(`/api/runs/${runId}/control/pause`, {
+      method: "POST",
+    }),
+  resumeRun: (runId: string) =>
+    request<{ run: Run; stages: RunStage[] }>(`/api/runs/${runId}/control/resume`, {
+      method: "POST",
+    }),
+  rejectRun: (runId: string) =>
+    request<{ run: Run; stages: RunStage[] }>(`/api/runs/${runId}/control/reject`, {
+      method: "POST",
+    }),
+  rollbackRun: (runId: string) =>
+    request<{ run: Run; stages: RunStage[] }>(`/api/runs/${runId}/control/rollback`, {
+      method: "POST",
+    }),
 };
