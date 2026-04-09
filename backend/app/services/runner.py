@@ -25,6 +25,11 @@ from .events import event_hub
 from .llm import generate_stage_result
 from .retrieval import search_literature_for_project
 from .sandbox import run_experiment_sandbox
+from .writing import (
+    build_delivery_package_payload,
+    build_paper_export_payload,
+    build_peer_review_payload,
+)
 
 
 RUN_TASKS: dict[str, asyncio.Task[Any]] = {}
@@ -147,6 +152,12 @@ def _execute_stage_payload(
             },
             "notes": f"Sandbox finished with status: {sandbox_result.get('status')}.",
         }
+    if stage.key == "paper_export":
+        return build_paper_export_payload(run_id, project, papers, prior_outputs)
+    if stage.key == "peer_review":
+        return build_peer_review_payload(run_id, project, papers, prior_outputs)
+    if stage.key == "delivery_package":
+        return build_delivery_package_payload(run_id, project, plan_markdown, papers, prior_outputs)
     return generate_stage_result(stage, project, plan_markdown, papers, prior_outputs, settings)
 
 

@@ -478,32 +478,49 @@ PIPELINE_STAGES: tuple[StageDefinition, ...] = (
         index=13,
         key="paper_export",
         label="Paper Export",
-        summary="Package the manuscript into export-ready assets for markdown, LaTeX, and PDF handoff.",
+        summary="Generate real manuscript assets in Markdown, LaTeX, bibliography, and compiled PDF formats.",
         owner="Export Manager",
         prompt_focus=(
-            "Prepare the manuscript for export by organizing sections, figures, references, and output package notes."
+            "Build final manuscript files, bibliography assets, citation checks, and claim-evidence validation outputs."
         ),
         contract=StageContract(
             inputs=(
                 "Approved Paper Revision output",
             ),
             must_produce=(
-                "Markdown package plan",
-                "LaTeX package plan",
-                "Compiled-PDF handoff checklist",
+                "Markdown manuscript package",
+                "LaTeX manuscript package",
+                "Compiled PDF package",
+                "Bibliography and citation verification artifacts",
+                "Claim-evidence consistency report",
             ),
             quality_bar=(
-                "Exports are described as packages or handoff assets unless a real compiled output exists",
+                "Markdown, LaTeX, BibTeX, and PDF files are all written to disk",
+                "Citation verification and claim-evidence checks surface missing support explicitly",
                 "Any missing references or figures are surfaced",
             ),
             disallowed=(
                 "Do not claim a PDF was compiled unless the artifact manifest says so",
+                "Do not mark unresolved citation errors as verified",
             ),
         ),
         artifact_schema=(
             ArtifactSchemaItem("markdown_package", "Markdown Package", "object", "Markdown export package."),
             ArtifactSchemaItem("latex_package", "LaTeX Package", "object", "LaTeX export package."),
-            ArtifactSchemaItem("pdf_handoff", "PDF Handoff", "object", "Checklist and missing pieces for PDF output."),
+            ArtifactSchemaItem("pdf_package", "PDF Package", "object", "Compiled PDF export package."),
+            ArtifactSchemaItem("bibliography", "Bibliography", "object", "Generated references and BibTeX assets."),
+            ArtifactSchemaItem(
+                "citation_verification",
+                "Citation Verification",
+                "object",
+                "Citation verification report and unresolved keys.",
+            ),
+            ArtifactSchemaItem(
+                "claim_evidence_report",
+                "Claim-Evidence Report",
+                "object",
+                "Claim support status across papers, experiments, and manuscript text.",
+            ),
         ),
     ),
     StageDefinition(
@@ -517,16 +534,18 @@ PIPELINE_STAGES: tuple[StageDefinition, ...] = (
         ),
         contract=StageContract(
             inputs=(
-                "Paper Export package notes",
+                "Paper Export package and verification reports",
                 "Revision log and open issues",
             ),
             must_produce=(
                 "Reviewer findings ordered by severity",
                 "Rebuttal or fix suggestions",
+                "Venue-specific peer-review rubrics",
             ),
             quality_bar=(
                 "Findings are concrete and tied to a section, claim, or artifact",
                 "Feedback distinguishes evidence gaps from writing issues",
+                "At least one rubric profile is recommended for the current manuscript",
             ),
             disallowed=(
                 "Do not produce empty praise without actionable review content",
@@ -535,6 +554,7 @@ PIPELINE_STAGES: tuple[StageDefinition, ...] = (
         artifact_schema=(
             ArtifactSchemaItem("findings", "Findings", "object[]", "Reviewer findings."),
             ArtifactSchemaItem("fixes", "Fixes", "object[]", "Suggested fixes or rebuttals."),
+            ArtifactSchemaItem("rubrics", "Rubrics", "object[]", "Venue-specific rubric evaluations."),
         ),
     ),
     StageDefinition(
@@ -567,6 +587,7 @@ PIPELINE_STAGES: tuple[StageDefinition, ...] = (
             ArtifactSchemaItem("delivery_summary", "Delivery Summary", "string", "What the user is receiving."),
             ArtifactSchemaItem("bundle_manifest", "Bundle Manifest", "object[]", "Files, outputs, and major artifacts."),
             ArtifactSchemaItem("next_steps", "Next Steps", "string[]", "Suggested follow-up work."),
+            ArtifactSchemaItem("bundle_archive", "Bundle Archive", "object", "Downloadable archive of delivery assets."),
         ),
     ),
 )

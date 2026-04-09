@@ -15,6 +15,7 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT_DIR / "backend" / "data"
 UPLOAD_DIR = DATA_DIR / "uploads"
 SANDBOX_DIR = DATA_DIR / "sandboxes"
+EXPORT_DIR = DATA_DIR / "exports"
 DB_PATH = DATA_DIR / "app.db"
 
 _LOCK = threading.Lock()
@@ -37,6 +38,7 @@ def _connect() -> sqlite3.Connection:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     SANDBOX_DIR.mkdir(parents=True, exist_ok=True)
+    EXPORT_DIR.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
@@ -77,6 +79,10 @@ def _media_url(path: str | None) -> str:
     except (OSError, ValueError):
         return ""
     return f"/media/{quote(relative.as_posix(), safe='/')}"
+
+
+def media_url_for_path(path: str | None) -> str:
+    return _media_url(path)
 
 
 def _paper_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
