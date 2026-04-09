@@ -2,8 +2,8 @@
 
 ## High Priority
 
-- Replace the current synthetic Docker experiment stub with repository-aware execution of real user code and benchmarks.
-- Validate stage outputs against their declared contracts and artifact schemas before marking stages complete.
+- Broaden sandbox dependency/bootstrap options and recovery controls for repository-aware benchmark runs.
+- Surface validation reports in the UI and tighten semantic contract checks beyond structural schema validation.
 - Persist approval comments and gate rationale so pause, reject, and rollback decisions are auditable.
 
 ## Retrieval And Papers

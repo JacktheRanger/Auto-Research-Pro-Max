@@ -41,6 +41,15 @@ def _project_context(
     grounded_evidence: str = "",
 ) -> str:
     paper_block = "\n".join(_paper_line(paper) for paper in papers) if papers else "- No papers attached."
+    execution_lines = [
+        f"Repository path: {project.get('repo_path') or 'n/a'}",
+        f"Repository URL: {project.get('repo_url') or 'n/a'}",
+        f"Repository ref: {project.get('repo_ref') or 'n/a'}",
+        f"Sandbox workdir: {project.get('sandbox_workdir') or '.'}",
+        f"Sandbox setup command: {project.get('sandbox_setup_command') or 'n/a'}",
+        f"Sandbox run command: {project.get('sandbox_run_command') or 'n/a'}",
+        f"Expected artifacts: {', '.join(project.get('expected_artifacts') or []) or 'none'}",
+    ]
     context = (
         f"Title: {project['title']}\n"
         f"Idea: {project['idea']}\n"
@@ -50,6 +59,7 @@ def _project_context(
         f"Constraints: {project['constraints_text']}\n"
         f"Compute budget: {project['compute_budget']}\n"
         f"API budget: {project['api_budget']}\n"
+        f"Execution config:\n" + "\n".join(execution_lines) + "\n"
         f"Attached papers:\n{paper_block}"
     )
     if grounded_evidence:
@@ -68,6 +78,33 @@ def _artifact_shell(stage: StageDefinition, markdown: str = "") -> dict[str, Any
             "summary": f"Derived from the {stage.label} markdown output." if markdown else "",
         }
     return payload
+
+
+def _artifact_summary(value: Any) -> str:
+    if isinstance(value, str):
+        compact = value.strip().replace("\n", " ")
+        return compact[:120] + ("..." if len(compact) > 120 else "") if compact else "empty string"
+    if isinstance(value, list):
+        return f"{len(value)} item(s)"
+    if isinstance(value, dict):
+        return f"{len(value)} field(s)"
+    return str(value)
+
+
+def _artifact_checklist_markdown(stage: StageDefinition, artifacts: dict[str, Any]) -> str:
+    lines: list[str] = []
+    for item in stage.artifact_schema:
+        lines.append(f"- {item.label} (`{item.key}`, {item.type}): {_artifact_summary(artifacts.get(item.key))}")
+    return "\n".join(lines)
+
+
+def _normalize_stage_markdown(stage: StageDefinition, markdown: str) -> str:
+    body = markdown.strip()
+    if not body:
+        return f"# {stage.label}\n"
+    if body.startswith("# "):
+        return body
+    return f"# {stage.label}\n\n{body}"
 
 
 def _fallback_artifacts(
@@ -149,7 +186,7 @@ def _fallback_artifacts(
                 {"module": "train_or_eval.py", "purpose": "Experiment entrypoint"},
             ],
             "dependencies": ["numpy", "pandas"],
-            "execution_checklist": ["Validate inputs", "Run sandbox stub", "Capture artifacts"],
+            "execution_checklist": ["Validate sandbox inputs", "Run the configured repository command", "Capture artifacts"],
         }
     if stage.key == "execution_review":
         return {
@@ -191,14 +228,14 @@ def _fallback_artifacts(
     if stage.key == "peer_review":
         return {
             "findings": [{"severity": "medium", "finding": "Claims must stay bounded by the available evidence."}],
-            "fixes": [{"action": "Add caveats where sandbox evidence is synthetic or incomplete."}],
+            "fixes": [{"action": "Add caveats where sandbox evidence is incomplete or failed to execute cleanly."}],
             "rubrics": [{"profile": "ml_conference", "overall_score": 3.0}],
         }
     if stage.key == "delivery_package":
         return {
             "delivery_summary": f"Delivery bundle for {project['title']} with {len(prior_keys)} preceding stage outputs.",
             "bundle_manifest": [{"item": entry.get("stage_label"), "status": entry.get("status")} for entry in prior_outputs],
-            "next_steps": ["Review approval gates", "Replace synthetic sandbox script with a real experiment."],
+            "next_steps": ["Review approval gates", "Tighten sandbox recovery controls for failed benchmark runs."],
             "bundle_archive": {"status": "generated"},
         }
     return _artifact_shell(stage)
@@ -216,19 +253,25 @@ def _fallback_stage_markdown(
         f"# {stage.label}\n\n"
         f"Owner: {stage.owner}\n\n"
         f"## Stage Focus\n{stage.prompt_focus}\n\n"
-        f"## Contract\n"
-        f"- Inputs: {', '.join(stage.contract.inputs)}\n"
-        f"- Must produce: {', '.join(stage.contract.must_produce)}\n"
-        f"- Quality bar: {', '.join(stage.contract.quality_bar)}\n"
-        f"- Disallowed: {', '.join(stage.contract.disallowed)}\n\n"
-        f"## Grounded Context\n"
+        f"## Inputs Used\n"
         f"- Project: {project['title']}\n"
         f"- Prior stages: {prior_stage_labels}\n"
-        f"- Attached papers: {len(papers)}\n\n"
+        f"- Attached papers: {len(papers)}\n"
+        f"- Contract inputs: {', '.join(stage.contract.inputs)}\n\n"
+        f"## Decisions\n"
+        f"- Stay within the declared scope, quality bar, and disallowed constraints.\n"
+        f"- Use deterministic fallback artifacts when no live model is configured.\n"
+        f"- Preserve the current stage-specific schema keys for downstream stages.\n\n"
         f"## Output\n"
         f"- Local fallback mode is active because no OpenAI API key is configured.\n"
         f"- The stage still uses a stage-specific contract and artifact schema.\n"
-        f"- Artifact snapshot: `{', '.join(artifacts.keys())}`\n"
+        f"- Artifact snapshot: `{', '.join(artifacts.keys())}`\n\n"
+        f"## Risks\n"
+        f"- The narrative is deterministic fallback content rather than a live model synthesis.\n"
+        f"- Any missing evidence in the attached papers remains unresolved until later review.\n"
+        f"- Downstream work should treat this stage as schema-valid but evidence-constrained.\n\n"
+        f"## Artifact Checklist\n"
+        f"{_artifact_checklist_markdown(stage, artifacts)}\n"
     )
 
 
@@ -262,7 +305,7 @@ def generate_plan_markdown(
             f"## Approval Gates\n{gate_lines or '- No stage gates configured.'}\n\n"
             f"## Key Risks\n"
             f"- Missing evidence from must-read papers.\n"
-            f"- Sandbox output may be synthetic if Docker is unavailable.\n"
+            f"- Sandbox execution depends on a configured repository path or git URL plus valid setup/run commands.\n"
             f"- Manuscript claims must stay bounded by grounded evidence.\n\n"
             f"## Paper Usage Strategy\n"
             f"- Prefer user-provided papers first.\n"
@@ -330,6 +373,7 @@ def generate_stage_result(
     prompt = (
         f"You are the {stage.owner} in a staged research pipeline.\n"
         "Return Markdown only.\n"
+        f"Start with the exact heading `# {stage.label}`.\n"
         "Ground every recommendation in the project brief, attached papers, and prior stage outputs.\n"
         "Do not fabricate results or citations. If evidence is missing, say so.\n"
         "Use the stage-specific contract and artifact schema below.\n"
@@ -348,9 +392,9 @@ def generate_stage_result(
         input=prompt,
     )
     return {
-        "content_md": response.output_text.strip(),
-        "artifacts": _artifact_shell(stage, response.output_text),
-        "notes": f"{stage.label} completed with a stage-specific contract.",
+        "content_md": _normalize_stage_markdown(stage, response.output_text),
+        "artifacts": artifacts,
+        "notes": f"{stage.label} completed with a stage-specific contract and deterministic schema-backed artifacts.",
     }
 
 

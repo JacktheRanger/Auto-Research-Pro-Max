@@ -17,9 +17,44 @@ export type Project = {
   constraints_text: string;
   compute_budget: string;
   api_budget: string;
+  repo_path: string;
+  repo_url: string;
+  repo_ref: string;
+  sandbox_workdir: string;
+  sandbox_setup_command: string;
+  sandbox_run_command: string;
+  expected_artifacts: string[];
   status: string;
   created_at: string;
   updated_at: string;
+};
+
+export type ProjectCreatePayload = {
+  title: string;
+  idea: string;
+  background: string;
+  direction: string;
+  goals: string;
+  constraints_text: string;
+  compute_budget: string;
+  api_budget: string;
+  repo_path?: string;
+  repo_url?: string;
+  repo_ref?: string;
+  sandbox_workdir?: string;
+  sandbox_setup_command?: string;
+  sandbox_run_command?: string;
+  expected_artifacts?: string[];
+};
+
+export type ProjectExecutionPayload = {
+  repo_path: string;
+  repo_url: string;
+  repo_ref: string;
+  sandbox_workdir: string;
+  sandbox_setup_command: string;
+  sandbox_run_command: string;
+  expected_artifacts: string[];
 };
 
 export type Paper = {
@@ -220,7 +255,7 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   listProjects: () => request<{ projects: Project[] }>("/api/projects"),
-  createProject: (payload: Omit<Project, "id" | "status" | "created_at" | "updated_at">) =>
+  createProject: (payload: ProjectCreatePayload) =>
     request<{ project: Project }>("/api/projects", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -232,6 +267,11 @@ export const api = {
       plan: Plan | null;
       latest_run: Run | null;
     }>(`/api/projects/${projectId}`),
+  updateProjectExecutionConfig: (projectId: string, payload: ProjectExecutionPayload) =>
+    request<{ project: Project }>(`/api/projects/${projectId}/execution-config`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
   uploadPaper: async (projectId: string, file: File, notes: string) => {
     const form = new FormData();
     form.append("file", file);

@@ -27,6 +27,7 @@ _JSON_DEFAULTS: dict[str, Any] = {
     "artifact_json": {},
     "content_json": {},
     "embedding_json": [],
+    "expected_artifacts": [],
 }
 
 
@@ -131,6 +132,13 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             constraints_text TEXT NOT NULL,
             compute_budget TEXT NOT NULL,
             api_budget TEXT NOT NULL,
+            repo_path TEXT NOT NULL DEFAULT '',
+            repo_url TEXT NOT NULL DEFAULT '',
+            repo_ref TEXT NOT NULL DEFAULT '',
+            sandbox_workdir TEXT NOT NULL DEFAULT '',
+            sandbox_setup_command TEXT NOT NULL DEFAULT '',
+            sandbox_run_command TEXT NOT NULL DEFAULT '',
+            expected_artifacts TEXT NOT NULL DEFAULT '[]',
             status TEXT NOT NULL,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
@@ -233,6 +241,17 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         );
         """
     )
+
+    for name, definition in (
+        ("repo_path", "TEXT NOT NULL DEFAULT ''"),
+        ("repo_url", "TEXT NOT NULL DEFAULT ''"),
+        ("repo_ref", "TEXT NOT NULL DEFAULT ''"),
+        ("sandbox_workdir", "TEXT NOT NULL DEFAULT ''"),
+        ("sandbox_setup_command", "TEXT NOT NULL DEFAULT ''"),
+        ("sandbox_run_command", "TEXT NOT NULL DEFAULT ''"),
+        ("expected_artifacts", "TEXT NOT NULL DEFAULT '[]'"),
+    ):
+        _ensure_column(conn, "projects", name, definition)
 
     for name, definition in (
         ("abstract", "TEXT NOT NULL DEFAULT ''"),
@@ -351,8 +370,10 @@ def create_project(payload: dict[str, str]) -> dict[str, Any]:
             """
             INSERT INTO projects (
                 id, title, idea, background, direction, goals, constraints_text,
-                compute_budget, api_budget, status, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                compute_budget, api_budget, repo_path, repo_url, repo_ref,
+                sandbox_workdir, sandbox_setup_command, sandbox_run_command,
+                expected_artifacts, status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 project_id,
@@ -364,6 +385,13 @@ def create_project(payload: dict[str, str]) -> dict[str, Any]:
                 payload["constraints_text"],
                 payload["compute_budget"],
                 payload["api_budget"],
+                payload.get("repo_path", ""),
+                payload.get("repo_url", ""),
+                payload.get("repo_ref", ""),
+                payload.get("sandbox_workdir", ""),
+                payload.get("sandbox_setup_command", ""),
+                payload.get("sandbox_run_command", ""),
+                _json_dump(payload.get("expected_artifacts", [])),
                 "draft",
                 now,
                 now,
@@ -383,6 +411,37 @@ def get_project(project_id: str) -> dict[str, Any] | None:
     with _connect() as conn:
         row = conn.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
     return _to_dict(row)
+
+
+def update_project_execution_config(project_id: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+    with _LOCK, _connect() as conn:
+        conn.execute(
+            """
+            UPDATE projects
+            SET repo_path = ?,
+                repo_url = ?,
+                repo_ref = ?,
+                sandbox_workdir = ?,
+                sandbox_setup_command = ?,
+                sandbox_run_command = ?,
+                expected_artifacts = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                payload.get("repo_path", ""),
+                payload.get("repo_url", ""),
+                payload.get("repo_ref", ""),
+                payload.get("sandbox_workdir", ""),
+                payload.get("sandbox_setup_command", ""),
+                payload.get("sandbox_run_command", ""),
+                _json_dump(payload.get("expected_artifacts", [])),
+                utc_now(),
+                project_id,
+            ),
+        )
+        conn.commit()
+    return get_project(project_id)
 
 
 def update_project_status(project_id: str, status: str) -> None:
