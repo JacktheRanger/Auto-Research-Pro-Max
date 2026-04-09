@@ -536,6 +536,20 @@ textarea {
   gap: 0.45rem;
 }
 
+.paper-thumb {
+  aspect-ratio: 3 / 4;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  display: block;
+  max-width: 180px;
+  object-fit: cover;
+  width: 100%;
+}
+
+.paper-thumb.compact {
+  max-width: 112px;
+}
+
 .inline-actions {
   flex-wrap: wrap;
 }

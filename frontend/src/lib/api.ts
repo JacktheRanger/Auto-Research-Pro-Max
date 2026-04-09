@@ -38,9 +38,20 @@ export type Paper = {
   authors_json: string[];
   source_provider: string;
   external_id: string;
+  canonical_key: string;
+  citation_key: string;
+  content_hash: string;
   extracted_text: string;
+  preview_image_path: string;
+  preview_thumbnail_path: string;
+  stored_file_url: string;
+  preview_image_url: string;
+  preview_thumbnail_url: string;
+  chunk_count: number;
+  retrieval_ready: boolean;
   metadata_json: Record<string, unknown>;
   created_at: string;
+  updated_at: string;
 };
 
 export type Plan = {
@@ -153,6 +164,31 @@ export type LiteratureSearchResponse = {
   errors: Record<string, string>;
 };
 
+export type GroundedPaperResult = {
+  paper_id: string;
+  paper_title: string;
+  citation_key: string;
+  source_type: string;
+  source_provider: string;
+  doi: string;
+  venue: string;
+  year: number;
+  url: string;
+  preview_thumbnail_url: string;
+  chunk_id: string;
+  chunk_index: number;
+  text: string;
+  score: number;
+  match_terms: string[];
+  strategy: string;
+};
+
+export type GroundedSearchResponse = {
+  query: string;
+  strategy: string;
+  results: GroundedPaperResult[];
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     headers: {
@@ -211,6 +247,11 @@ export const api = {
   },
   addPaperUrl: (projectId: string, payload: { url: string; title: string; notes: string }) =>
     request<{ paper: Paper; papers: Paper[] }>(`/api/projects/${projectId}/papers/url`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  searchPaperGrounding: (projectId: string, payload: { query: string; limit?: number }) =>
+    request<GroundedSearchResponse>(`/api/projects/${projectId}/papers/retrieve`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),

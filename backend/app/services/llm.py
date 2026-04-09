@@ -5,6 +5,7 @@ from typing import Any
 from openai import OpenAI
 
 from ..stages import StageDefinition
+from .grounding import retrieve_paper_context_text
 
 
 def _client(settings: dict[str, Any]) -> OpenAI | None:
@@ -34,9 +35,13 @@ def _paper_line(paper: dict[str, Any]) -> str:
     )
 
 
-def _project_context(project: dict[str, Any], papers: list[dict[str, Any]]) -> str:
+def _project_context(
+    project: dict[str, Any],
+    papers: list[dict[str, Any]],
+    grounded_evidence: str = "",
+) -> str:
     paper_block = "\n".join(_paper_line(paper) for paper in papers) if papers else "- No papers attached."
-    return (
+    context = (
         f"Title: {project['title']}\n"
         f"Idea: {project['idea']}\n"
         f"Background: {project['background']}\n"
@@ -47,6 +52,9 @@ def _project_context(project: dict[str, Any], papers: list[dict[str, Any]]) -> s
         f"API budget: {project['api_budget']}\n"
         f"Attached papers:\n{paper_block}"
     )
+    if grounded_evidence:
+        context = f"{context}\n\nGrounded paper retrieval:\n{grounded_evidence}"
+    return context
 
 
 def _artifact_shell(stage: StageDefinition, markdown: str = "") -> dict[str, Any]:
@@ -226,7 +234,13 @@ def generate_plan_markdown(
     stage_catalog: list[dict[str, Any]],
 ) -> str:
     client = _client(settings)
-    context = _project_context(project, papers)
+    grounded_evidence = retrieve_paper_context_text(
+        project["id"],
+        f"{project['title']} {project['direction']} {project['idea']}",
+        settings,
+        limit=5,
+    )
+    context = _project_context(project, papers, grounded_evidence)
     gate_lines = "\n".join(
         f"- {stage['label']}: {stage['approval_gate']['label']} -> rollback to {stage['approval_gate']['rollback_to_stage_key']}"
         for stage in stage_catalog
@@ -280,6 +294,12 @@ def generate_stage_result(
 ) -> dict[str, Any]:
     client = _client(settings)
     artifacts = _fallback_artifacts(stage, project, papers, prior_outputs)
+    grounded_evidence = retrieve_paper_context_text(
+        project["id"],
+        f"{stage.label} {stage.prompt_focus} {project['title']} {project['direction']}",
+        settings,
+        limit=6,
+    )
     if client is None:
         return {
             "content_md": _fallback_stage_markdown(stage, project, papers, prior_outputs, artifacts),
@@ -288,7 +308,7 @@ def generate_stage_result(
         }
 
     model = settings.get("code_model") if stage.key in {"code_prototype"} else settings.get("research_model")
-    context = _project_context(project, papers)
+    context = _project_context(project, papers, grounded_evidence)
     prior_text = "\n\n".join(
         f"## {entry['stage_label']}\n{entry.get('content_md', '')}" for entry in prior_outputs if entry.get("content_md")
     )

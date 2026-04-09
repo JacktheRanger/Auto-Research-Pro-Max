@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .db import (
-    add_paper_source,
+    DATA_DIR,
     approve_plan,
     get_latest_run,
     get_plan,
@@ -26,9 +26,10 @@ from .db import (
     get_settings,
 )
 from .services.events import event_hub
+from .services.grounding import retrieve_grounded_snippets
 from .services.llm import generate_plan_markdown, test_connection
-from .services.papers import save_remote_paper, save_uploaded_paper
-from .services.retrieval import result_to_paper_payload, search_literature
+from .services.papers import save_literature_result, save_remote_paper, save_uploaded_paper
+from .services.retrieval import search_literature
 from .services.runner import pause_run, reject_run, resume_run, rollback_run, start_run
 from .stages import STAGE_COUNT, stage_catalog
 
@@ -78,6 +79,11 @@ class LiteratureImportPayload(BaseModel):
     citation_count: int = 0
     metadata: dict[str, Any] = Field(default_factory=dict)
     notes: str = ""
+
+
+class GroundedSearchPayload(BaseModel):
+    query: str = Field(min_length=2)
+    limit: int = Field(default=6, ge=1, le=12)
 
 
 app = FastAPI(title="Auto Research Pro Max", version="0.2.0")
@@ -173,7 +179,7 @@ async def papers_upload(
     project = get_project(project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
-    paper = await save_uploaded_paper(project_id, file, notes)
+    paper = await save_uploaded_paper(project_id, file, notes, get_settings())
     return {"paper": paper, "papers": list_papers(project_id)}
 
 
@@ -182,8 +188,16 @@ async def papers_url(project_id: str, payload: RemotePaperPayload) -> dict[str, 
     project = get_project(project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
-    paper = await save_remote_paper(project_id, payload.url, payload.title, payload.notes)
+    paper = await save_remote_paper(project_id, payload.url, payload.title, payload.notes, get_settings())
     return {"paper": paper, "papers": list_papers(project_id)}
+
+
+@app.post("/api/projects/{project_id}/papers/retrieve")
+async def papers_retrieve(project_id: str, payload: GroundedSearchPayload) -> dict[str, Any]:
+    project = get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return retrieve_grounded_snippets(project_id, payload.query, get_settings(), limit=payload.limit)
 
 
 @app.post("/api/projects/{project_id}/literature/search")
@@ -199,25 +213,24 @@ async def papers_import(project_id: str, payload: LiteratureImportPayload) -> di
     project = get_project(project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
-    paper = add_paper_source(
-        result_to_paper_payload(
-            project_id,
-            {
-                "provider": payload.provider,
-                "title": payload.title,
-                "abstract": payload.abstract,
-                "year": payload.year,
-                "venue": payload.venue,
-                "authors": payload.authors,
-                "doi": payload.doi,
-                "url": payload.url,
-                "pdf_url": payload.pdf_url,
-                "external_id": payload.external_id,
-                "citation_count": payload.citation_count,
-                "metadata": payload.metadata,
-            },
-            notes=payload.notes,
-        )
+    paper = await save_literature_result(
+        project_id,
+        {
+            "provider": payload.provider,
+            "title": payload.title,
+            "abstract": payload.abstract,
+            "year": payload.year,
+            "venue": payload.venue,
+            "authors": payload.authors,
+            "doi": payload.doi,
+            "url": payload.url,
+            "pdf_url": payload.pdf_url,
+            "external_id": payload.external_id,
+            "citation_count": payload.citation_count,
+            "metadata": payload.metadata,
+        },
+        payload.notes,
+        get_settings(),
     )
     return {"paper": paper, "papers": list_papers(project_id)}
 
@@ -313,5 +326,6 @@ async def run_events(run_id: str, websocket: WebSocket) -> None:
 
 
 frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+app.mount("/media", StaticFiles(directory=str(DATA_DIR)), name="media")
 if frontend_dist.exists():
     app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")

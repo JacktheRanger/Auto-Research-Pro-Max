@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import { StageTimeline } from "./components/StageTimeline";
 import {
   api,
+  type GroundedPaperResult,
   type LiteratureResult,
   type Paper,
   type Plan,
@@ -220,6 +221,16 @@ const uiCopy = {
     gateState: "Gate State",
     stageNotes: "Stage Notes",
     retrievedVia: "Retrieved via",
+    citationKey: "Citation key",
+    doiLabel: "DOI",
+    groundedRetrieval: "Paper-grounded Retrieval",
+    groundedRetrievalPlaceholder: "Search within attached papers and imported chunks",
+    groundedSearch: "Search Papers",
+    groundedStrategy: "Retrieval strategy",
+    noGroundedResults: "No grounded snippets yet.",
+    chunkCount: "Chunks",
+    openPdf: "Open PDF",
+    preview: "Preview",
   },
   cn: {
     ready: "已就绪。",
@@ -333,6 +344,16 @@ const uiCopy = {
     gateState: "门控状态",
     stageNotes: "阶段备注",
     retrievedVia: "检索来源",
+    citationKey: "引用键",
+    doiLabel: "DOI",
+    groundedRetrieval: "论文 Grounded 检索",
+    groundedRetrievalPlaceholder: "在已附加论文和已切块内容中检索",
+    groundedSearch: "检索论文",
+    groundedStrategy: "检索策略",
+    noGroundedResults: "还没有 grounded snippet。",
+    chunkCount: "分块数",
+    openPdf: "打开 PDF",
+    preview: "预览",
   },
 } satisfies Record<LocaleMode, Record<string, string | ((count: number) => string)>>;
 
@@ -367,6 +388,30 @@ function prettyJson(value: unknown) {
   return JSON.stringify(value ?? {}, null, 2);
 }
 
+function summarizeAuthors(authors: string[]) {
+  if (!authors.length) {
+    return "";
+  }
+  if (authors.length <= 4) {
+    return authors.join(", ");
+  }
+  return `${authors.slice(0, 4).join(", ")} +${authors.length - 4}`;
+}
+
+function paperSummaryLine(paper: Paper) {
+  const segments = [paper.source_type];
+  if (paper.year) {
+    segments.push(String(paper.year));
+  }
+  if (paper.venue) {
+    segments.push(paper.venue);
+  }
+  if (paper.citation_key) {
+    segments.push(paper.citation_key);
+  }
+  return segments.join(" · ");
+}
+
 export default function App() {
   const [locale, setLocale] = useState<LocaleMode>(() => {
     if (typeof window === "undefined") {
@@ -391,6 +436,9 @@ export default function App() {
   const [literatureQuery, setLiteratureQuery] = useState("");
   const [literatureResults, setLiteratureResults] = useState<LiteratureResult[]>([]);
   const [literatureErrors, setLiteratureErrors] = useState<Record<string, string>>({});
+  const [groundedQuery, setGroundedQuery] = useState("");
+  const [groundedResults, setGroundedResults] = useState<GroundedPaperResult[]>([]);
+  const [groundedStrategy, setGroundedStrategy] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [projectDetail, setProjectDetail] = useState<ProjectDetail | null>(null);
   const [run, setRun] = useState<Run | null>(null);
@@ -445,6 +493,8 @@ export default function App() {
     const detail = await api.getProject(projectId);
     setSelectedProjectId(projectId);
     setProjectDetail(detail);
+    setGroundedResults([]);
+    setGroundedStrategy("");
     setRun(detail.latest_run);
     setSelectedStageIndex(detail.latest_run?.current_stage_index || 1);
     if (detail.latest_run) {
@@ -586,6 +636,19 @@ export default function App() {
     });
     setLiteratureResults(response.results);
     setLiteratureErrors(response.errors);
+  }
+
+  async function handleSearchGroundedPapers(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selectedProjectId || !groundedQuery.trim()) {
+      return;
+    }
+    const response = await api.searchPaperGrounding(selectedProjectId, {
+      query: groundedQuery,
+      limit: 6,
+    });
+    setGroundedResults(response.results);
+    setGroundedStrategy(response.strategy);
   }
 
   async function handleImportLiterature(result: LiteratureResult) {
@@ -1066,6 +1129,8 @@ export default function App() {
                     <span>
                       {result.provider} · {result.year || "n/a"} · {result.venue || "n/a"}
                     </span>
+                    {result.authors.length ? <p>{summarizeAuthors(result.authors)}</p> : null}
+                    {result.doi ? <p>{text.doiLabel}: {result.doi}</p> : null}
                     {result.url ? (
                       <a href={result.url} rel="noreferrer" target="_blank">
                         {result.url}
@@ -1085,13 +1150,31 @@ export default function App() {
               <div className="paper-list">
                 {(projectDetail?.papers ?? []).map((paper) => (
                   <article key={paper.id} className="paper-card">
+                    {paper.preview_thumbnail_url ? (
+                      <a href={paper.preview_image_url || paper.preview_thumbnail_url} rel="noreferrer" target="_blank">
+                        <img
+                          alt={`${paper.title} ${text.preview}`}
+                          className="paper-thumb"
+                          loading="lazy"
+                          src={paper.preview_thumbnail_url}
+                        />
+                      </a>
+                    ) : null}
                     <strong>{paper.title}</strong>
-                    <span>
-                      {paper.source_type} · {paper.year || "n/a"} · {paper.venue || "n/a"}
-                    </span>
+                    <span>{paperSummaryLine(paper)}</span>
+                    {paper.authors_json.length ? <p>{summarizeAuthors(paper.authors_json)}</p> : null}
+                    {paper.doi ? <p>{text.doiLabel}: {paper.doi}</p> : null}
+                    <p>
+                      {text.chunkCount}: {paper.chunk_count} · {paper.retrieval_ready ? "ready" : "pending"}
+                    </p>
                     {paper.url ? (
                       <a href={paper.url} rel="noreferrer" target="_blank">
                         {paper.url}
+                      </a>
+                    ) : null}
+                    {paper.stored_file_url ? (
+                      <a href={paper.stored_file_url} rel="noreferrer" target="_blank">
+                        {text.openPdf}
                       </a>
                     ) : null}
                     {paper.notes ? <p>{paper.notes}</p> : null}
@@ -1264,14 +1347,62 @@ export default function App() {
               <div className="panel-header">
                 <h2>{text.sourceGroundingSnapshot}</h2>
               </div>
+              <form className="stacked-form" onSubmit={handleSearchGroundedPapers}>
+                <label>
+                  {text.groundedRetrieval}
+                  <input
+                    value={groundedQuery}
+                    onChange={(event) => setGroundedQuery(event.target.value)}
+                    placeholder={text.groundedRetrievalPlaceholder}
+                  />
+                </label>
+                <button disabled={!selectedProjectId} type="submit">
+                  {text.groundedSearch}
+                </button>
+                {groundedStrategy ? (
+                  <p className="muted">
+                    {text.groundedStrategy}: {groundedStrategy}
+                  </p>
+                ) : null}
+              </form>
+              <div className="snapshot-list">
+                {groundedResults.length === 0 ? (
+                  <p className="muted">{text.noGroundedResults}</p>
+                ) : null}
+                {groundedResults.map((item) => (
+                  <div key={item.chunk_id} className="snapshot-item">
+                    {item.preview_thumbnail_url ? (
+                      <img
+                        alt={`${item.paper_title} ${text.preview}`}
+                        className="paper-thumb compact"
+                        loading="lazy"
+                        src={item.preview_thumbnail_url}
+                      />
+                    ) : null}
+                    <strong>{item.paper_title}</strong>
+                    <span>
+                      {item.citation_key || "uncited"} · {item.source_provider || item.source_type} · score{" "}
+                      {item.score.toFixed(3)}
+                    </span>
+                    <p>{item.text.slice(0, 260)}</p>
+                  </div>
+                ))}
+              </div>
               <div className="snapshot-list">
                 {(projectDetail?.papers ?? []).map((paper) => (
                   <div key={paper.id} className="snapshot-item">
+                    {paper.preview_thumbnail_url ? (
+                      <img
+                        alt={`${paper.title} ${text.preview}`}
+                        className="paper-thumb compact"
+                        loading="lazy"
+                        src={paper.preview_thumbnail_url}
+                      />
+                    ) : null}
                     <strong>{paper.title}</strong>
-                    <span>
-                      {paper.source_type} · {paper.year || "n/a"} · {paper.venue || "n/a"}
-                    </span>
-                    {paper.authors_json?.length ? <p>{paper.authors_json.slice(0, 4).join(", ")}</p> : null}
+                    <span>{paperSummaryLine(paper)}</span>
+                    {paper.authors_json?.length ? <p>{summarizeAuthors(paper.authors_json)}</p> : null}
+                    {paper.doi ? <p>{text.doiLabel}: {paper.doi}</p> : null}
                     <p>{paper.extracted_text?.slice(0, 260) || paper.abstract?.slice(0, 260) || text.noExtractedText}</p>
                   </div>
                 ))}

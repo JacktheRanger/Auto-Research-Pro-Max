@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from .stages import PIPELINE_STAGES, rollback_target_index, stage_catalog
 
@@ -24,6 +25,7 @@ _JSON_DEFAULTS: dict[str, Any] = {
     "artifact_schema_json": [],
     "artifact_json": {},
     "content_json": {},
+    "embedding_json": [],
 }
 
 
@@ -65,6 +67,28 @@ def _to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
 
 def _json_dump(value: Any) -> str:
     return json.dumps(value, ensure_ascii=True)
+
+
+def _media_url(path: str | None) -> str:
+    if not path:
+        return ""
+    try:
+        relative = Path(path).resolve().relative_to(DATA_DIR.resolve())
+    except (OSError, ValueError):
+        return ""
+    return f"/media/{quote(relative.as_posix(), safe='/')}"
+
+
+def _paper_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
+    payload = _to_dict(row)
+    if payload is None:
+        return None
+    payload["stored_file_url"] = _media_url(payload.get("stored_path"))
+    payload["preview_image_url"] = _media_url(payload.get("preview_image_path"))
+    payload["preview_thumbnail_url"] = _media_url(payload.get("preview_thumbnail_path"))
+    payload["chunk_count"] = int(payload.get("chunk_count") or 0)
+    payload["retrieval_ready"] = payload["chunk_count"] > 0
+    return payload
 
 
 def _table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
@@ -122,11 +146,35 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             authors_json TEXT NOT NULL DEFAULT '[]',
             source_provider TEXT NOT NULL DEFAULT '',
             external_id TEXT NOT NULL DEFAULT '',
+            canonical_key TEXT NOT NULL DEFAULT '',
+            citation_key TEXT NOT NULL DEFAULT '',
+            content_hash TEXT NOT NULL DEFAULT '',
             extracted_text TEXT NOT NULL DEFAULT '',
+            preview_image_path TEXT NOT NULL DEFAULT '',
+            preview_thumbnail_path TEXT NOT NULL DEFAULT '',
             metadata_json TEXT NOT NULL DEFAULT '{}',
             created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT '',
             FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
         );
+
+        CREATE TABLE IF NOT EXISTS paper_chunks (
+            id TEXT PRIMARY KEY,
+            paper_id TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            chunk_index INTEGER NOT NULL,
+            content TEXT NOT NULL,
+            token_estimate INTEGER NOT NULL DEFAULT 0,
+            embedding_json TEXT NOT NULL DEFAULT '[]',
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            UNIQUE (paper_id, chunk_index),
+            FOREIGN KEY (paper_id) REFERENCES papers(id) ON DELETE CASCADE,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_paper_chunks_project ON paper_chunks(project_id);
+        CREATE INDEX IF NOT EXISTS idx_paper_chunks_paper ON paper_chunks(paper_id);
 
         CREATE TABLE IF NOT EXISTS plans (
             project_id TEXT PRIMARY KEY,
@@ -188,7 +236,13 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         ("authors_json", "TEXT NOT NULL DEFAULT '[]'"),
         ("source_provider", "TEXT NOT NULL DEFAULT ''"),
         ("external_id", "TEXT NOT NULL DEFAULT ''"),
+        ("canonical_key", "TEXT NOT NULL DEFAULT ''"),
+        ("citation_key", "TEXT NOT NULL DEFAULT ''"),
+        ("content_hash", "TEXT NOT NULL DEFAULT ''"),
         ("metadata_json", "TEXT NOT NULL DEFAULT '{}'"),
+        ("preview_image_path", "TEXT NOT NULL DEFAULT ''"),
+        ("preview_thumbnail_path", "TEXT NOT NULL DEFAULT ''"),
+        ("updated_at", "TEXT NOT NULL DEFAULT ''"),
     ):
         _ensure_column(conn, "papers", name, definition)
 
@@ -342,8 +396,9 @@ def add_paper_source(payload: dict[str, Any]) -> dict[str, Any]:
             """
             INSERT INTO papers (
                 id, project_id, source_type, title, url, file_name, stored_path, notes, abstract,
-                doi, venue, year, authors_json, source_provider, external_id, extracted_text, metadata_json, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                doi, venue, year, authors_json, source_provider, external_id, canonical_key, citation_key,
+                content_hash, extracted_text, preview_image_path, preview_thumbnail_path, metadata_json, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 paper_id,
@@ -361,9 +416,73 @@ def add_paper_source(payload: dict[str, Any]) -> dict[str, Any]:
                 _json_dump(payload.get("authors_json", [])),
                 payload.get("source_provider", ""),
                 payload.get("external_id", ""),
+                payload.get("canonical_key", ""),
+                payload.get("citation_key", ""),
+                payload.get("content_hash", ""),
                 payload.get("extracted_text", ""),
+                payload.get("preview_image_path", ""),
+                payload.get("preview_thumbnail_path", ""),
                 _json_dump(payload.get("metadata_json", {})),
                 now,
+                payload.get("updated_at", now),
+            ),
+        )
+        conn.commit()
+    return get_paper(paper_id)
+
+
+def update_paper_source(paper_id: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+    now = utc_now()
+    with _LOCK, _connect() as conn:
+        conn.execute(
+            """
+            UPDATE papers
+            SET source_type = ?,
+                title = ?,
+                url = ?,
+                file_name = ?,
+                stored_path = ?,
+                notes = ?,
+                abstract = ?,
+                doi = ?,
+                venue = ?,
+                year = ?,
+                authors_json = ?,
+                source_provider = ?,
+                external_id = ?,
+                canonical_key = ?,
+                citation_key = ?,
+                content_hash = ?,
+                extracted_text = ?,
+                preview_image_path = ?,
+                preview_thumbnail_path = ?,
+                metadata_json = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                payload["source_type"],
+                payload["title"],
+                payload.get("url", ""),
+                payload.get("file_name", ""),
+                payload.get("stored_path", ""),
+                payload.get("notes", ""),
+                payload.get("abstract", ""),
+                payload.get("doi", ""),
+                payload.get("venue", ""),
+                int(payload.get("year") or 0),
+                _json_dump(payload.get("authors_json", [])),
+                payload.get("source_provider", ""),
+                payload.get("external_id", ""),
+                payload.get("canonical_key", ""),
+                payload.get("citation_key", ""),
+                payload.get("content_hash", ""),
+                payload.get("extracted_text", ""),
+                payload.get("preview_image_path", ""),
+                payload.get("preview_thumbnail_path", ""),
+                _json_dump(payload.get("metadata_json", {})),
+                payload.get("updated_at", now),
+                paper_id,
             ),
         )
         conn.commit()
@@ -373,16 +492,178 @@ def add_paper_source(payload: dict[str, Any]) -> dict[str, Any]:
 def list_papers(project_id: str) -> list[dict[str, Any]]:
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT * FROM papers WHERE project_id = ? ORDER BY created_at ASC",
+            """
+            SELECT papers.*,
+                   COALESCE(chunk_stats.chunk_count, 0) AS chunk_count
+            FROM papers
+            LEFT JOIN (
+                SELECT paper_id, COUNT(*) AS chunk_count
+                FROM paper_chunks
+                GROUP BY paper_id
+            ) AS chunk_stats
+                ON chunk_stats.paper_id = papers.id
+            WHERE papers.project_id = ?
+            ORDER BY papers.created_at ASC
+            """,
             (project_id,),
         ).fetchall()
-    return [_to_dict(row) for row in rows if row is not None]
+    return [_paper_to_dict(row) for row in rows if row is not None]
 
 
 def get_paper(paper_id: str) -> dict[str, Any] | None:
     with _connect() as conn:
-        row = conn.execute("SELECT * FROM papers WHERE id = ?", (paper_id,)).fetchone()
-    return _to_dict(row)
+        row = conn.execute(
+            """
+            SELECT papers.*,
+                   COALESCE(chunk_stats.chunk_count, 0) AS chunk_count
+            FROM papers
+            LEFT JOIN (
+                SELECT paper_id, COUNT(*) AS chunk_count
+                FROM paper_chunks
+                GROUP BY paper_id
+            ) AS chunk_stats
+                ON chunk_stats.paper_id = papers.id
+            WHERE papers.id = ?
+            """,
+            (paper_id,),
+        ).fetchone()
+    return _paper_to_dict(row)
+
+
+def find_duplicate_paper(
+    project_id: str,
+    *,
+    doi: str = "",
+    canonical_key: str = "",
+    external_id: str = "",
+    source_provider: str = "",
+    content_hash: str = "",
+) -> dict[str, Any] | None:
+    checks = [
+        ("SELECT id FROM papers WHERE project_id = ? AND doi = ? AND doi != '' LIMIT 1", (project_id, doi.strip())),
+        (
+            "SELECT id FROM papers WHERE project_id = ? AND content_hash = ? AND content_hash != '' LIMIT 1",
+            (project_id, content_hash.strip()),
+        ),
+        (
+            """
+            SELECT id FROM papers
+            WHERE project_id = ? AND external_id = ? AND external_id != '' AND source_provider = ?
+            LIMIT 1
+            """,
+            (project_id, external_id.strip(), source_provider.strip()),
+        ),
+        (
+            "SELECT id FROM papers WHERE project_id = ? AND canonical_key = ? AND canonical_key != '' LIMIT 1",
+            (project_id, canonical_key.strip()),
+        ),
+    ]
+    with _connect() as conn:
+        for query, params in checks:
+            if not any(params[1:]):
+                continue
+            row = conn.execute(query, params).fetchone()
+            if row is not None:
+                return get_paper(row["id"])
+    return None
+
+
+def paper_exists_with_citation_key(project_id: str, citation_key: str, exclude_paper_id: str = "") -> bool:
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT id
+            FROM papers
+            WHERE project_id = ? AND citation_key = ? AND id != ?
+            LIMIT 1
+            """,
+            (project_id, citation_key, exclude_paper_id),
+        ).fetchone()
+    return row is not None
+
+
+def replace_paper_chunks(paper_id: str, project_id: str, chunks: list[dict[str, Any]]) -> None:
+    now = utc_now()
+    with _LOCK, _connect() as conn:
+        conn.execute("DELETE FROM paper_chunks WHERE paper_id = ?", (paper_id,))
+        for chunk in chunks:
+            conn.execute(
+                """
+                INSERT INTO paper_chunks (
+                    id, paper_id, project_id, chunk_index, content, token_estimate,
+                    embedding_json, metadata_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    chunk.get("id") or f"chunk_{uuid.uuid4().hex[:12]}",
+                    paper_id,
+                    project_id,
+                    int(chunk.get("chunk_index") or 0),
+                    chunk.get("content") or "",
+                    int(chunk.get("token_estimate") or 0),
+                    _json_dump(chunk.get("embedding_json", [])),
+                    _json_dump(chunk.get("metadata_json", {})),
+                    chunk.get("created_at") or now,
+                ),
+            )
+        conn.commit()
+
+
+def list_project_paper_chunks(project_id: str) -> list[dict[str, Any]]:
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                paper_chunks.*,
+                papers.title AS paper_title,
+                papers.source_type AS paper_source_type,
+                papers.source_provider AS paper_source_provider,
+                papers.citation_key AS paper_citation_key,
+                papers.doi AS paper_doi,
+                papers.venue AS paper_venue,
+                papers.year AS paper_year,
+                papers.url AS paper_url,
+                papers.preview_thumbnail_path AS paper_preview_thumbnail_path
+            FROM paper_chunks
+            INNER JOIN papers ON papers.id = paper_chunks.paper_id
+            WHERE paper_chunks.project_id = ?
+            ORDER BY paper_chunks.paper_id ASC, paper_chunks.chunk_index ASC
+            """,
+            (project_id,),
+        ).fetchall()
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        payload = _to_dict(row)
+        if payload is None:
+            continue
+        payload["paper_preview_thumbnail_url"] = _media_url(payload.get("paper_preview_thumbnail_path"))
+        items.append(payload)
+    return items
+
+
+def list_paper_chunks(paper_id: str) -> list[dict[str, Any]]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM paper_chunks WHERE paper_id = ? ORDER BY chunk_index ASC",
+            (paper_id,),
+        ).fetchall()
+    return [_to_dict(row) for row in rows if row is not None]
+
+
+def update_chunk_embeddings(chunks: list[dict[str, Any]]) -> None:
+    if not chunks:
+        return
+    with _LOCK, _connect() as conn:
+        for chunk in chunks:
+            conn.execute(
+                "UPDATE paper_chunks SET embedding_json = ?, metadata_json = ? WHERE id = ?",
+                (
+                    _json_dump(chunk.get("embedding_json", [])),
+                    _json_dump(chunk.get("metadata_json", {})),
+                    chunk["id"],
+                ),
+            )
+        conn.commit()
 
 
 def save_plan(
