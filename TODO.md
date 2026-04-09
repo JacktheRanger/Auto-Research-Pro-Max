@@ -2,8 +2,9 @@
 
 ## High Priority
 
+- Add fixture repositories and Docker-backed smoke coverage for repository-aware sandbox execution.
 - Broaden sandbox dependency/bootstrap options and recovery controls for repository-aware benchmark runs.
-- Surface validation reports in the UI and tighten semantic contract checks beyond structural schema validation.
+- Surface validation reports in the UI and tighten semantic contract checks beyond the current structural schema validation.
 - Persist approval comments and gate rationale so pause, reject, and rollback decisions are auditable.
 
 ## Retrieval And Papers
