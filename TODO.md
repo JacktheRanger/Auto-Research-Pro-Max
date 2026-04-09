@@ -2,31 +2,37 @@
 
 ## High Priority
 
-- Add true literature retrieval adapters for `OpenAlex`, `Semantic Scholar`, `Crossref`, and `arXiv`.
-- Replace generic stage generation with stage-specific prompts, contracts, and artifact schemas.
-- Add a real experiment sandbox with `Docker`, timeouts, package allowlists, and artifact capture.
-- Split the current `paper_draft` stage into outline, drafting, revision, and export sub-pipelines.
-- Support pause, resume, reject, and rollback at selected approval gates.
+- Replace the current synthetic Docker experiment stub with repository-aware execution of real user code and benchmarks.
+- Validate stage outputs against their declared contracts and artifact schemas before marking stages complete.
+- Persist approval comments and gate rationale so pause, reject, and rollback decisions are auditable.
+
+## Recently Completed
+
+- Added live literature retrieval adapters for `OpenAlex`, `Semantic Scholar`, `Crossref`, and `arXiv`.
+- Replaced generic stage generation with stage-specific prompts, contracts, artifact schemas, and approval gates.
+- Added Docker-based sandbox execution with timeouts, package allowlists, and artifact capture.
+- Split the manuscript flow into outline, drafting, revision, export, peer review, and delivery stages.
+- Added pause, resume, reject, and rollback controls at selected approval gates.
+- Added richer paper metadata extraction, PDF previews, chunking, deduplication, citation-key normalization, and paper-grounded retrieval.
 
 ## Retrieval And Papers
 
-- Extract richer metadata from remote paper URLs, including DOI, venue, year, and author list.
-- Add PDF preview thumbnails and first-page rendering for uploaded papers.
-- Add chunking and embeddings for paper-grounded retrieval.
-- Add paper deduplication and citation-key normalization.
+- Add OCR fallback for scanned or image-only PDFs.
+- Add manual metadata editing and provider refresh controls for imported papers.
+- Add incremental re-indexing and larger-scale local retrieval storage for bigger paper collections.
+- Add citation-graph extraction and bibliography-ready reference exports on top of normalized paper identifiers.
 
 ## Workflow
 
-- Expand the current 10-stage pipeline with more stages as the product matures.
 - Add optional branching to compare multiple hypotheses.
 - Add stage retry policies and failure recovery playbooks.
 - Add per-stage cost tracking and usage analytics.
 - Add project templates for different research modes: survey, benchmark, implementation, ablation-heavy paper.
-- Allow the user to customize the stage count and stage list per project.
+- Allow the user to customize the current stage count and stage list per project.
 
 ## Writing And Delivery
 
-- Export final packages as `Markdown`, `LaTeX`, and compiled `PDF`.
+- Export real final packages as `Markdown`, `LaTeX`, and compiled `PDF`, not just handoff plans.
 - Add bibliography generation and citation verification.
 - Add claim-evidence consistency checks between papers, experiments, and manuscript text.
 - Add peer-review rubrics for different venues.
