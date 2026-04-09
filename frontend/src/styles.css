@@ -358,6 +358,30 @@ textarea {
   text-transform: uppercase;
 }
 
+.stage-gate {
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.3rem 0.65rem;
+  text-transform: uppercase;
+}
+
+.gate-idle,
+.gate-pending {
+  background: rgba(199, 155, 43, 0.14);
+  color: var(--warning);
+}
+
+.gate-approved {
+  background: rgba(30, 143, 122, 0.14);
+  color: var(--mint);
+}
+
+.gate-rejected {
+  background: rgba(214, 95, 86, 0.14);
+  color: var(--danger);
+}
+
 .stage-pending {
   opacity: 0.74;
 }
@@ -422,6 +446,100 @@ textarea {
   justify-content: space-between;
 }
 
+.gate-panel,
+.detail-block,
+.artifact-item {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 0.95rem;
+}
+
+.gate-panel,
+.detail-stack,
+.detail-block {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.detail-stack {
+  margin-top: 1rem;
+}
+
+.detail-block h3 {
+  margin: 0;
+}
+
+.artifact-item strong,
+.detail-block strong {
+  display: block;
+}
+
+.artifact-item span {
+  color: var(--muted);
+  display: block;
+  font-size: 0.82rem;
+  margin-top: 0.2rem;
+  text-transform: uppercase;
+}
+
+.artifact-item p {
+  margin: 0.35rem 0 0;
+}
+
+.contract-list {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.contract-list li {
+  margin: 0.2rem 0;
+}
+
+.json-surface {
+  background: rgba(7, 21, 26, 0.06);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  color: var(--text);
+  margin: 0;
+  max-height: 360px;
+  overflow: auto;
+  padding: 0.9rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+:root[data-theme="dark"] .json-surface {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.paper-card strong,
+.snapshot-item strong {
+  display: block;
+}
+
+.paper-card span,
+.snapshot-item span {
+  color: var(--muted);
+  display: block;
+  font-size: 0.82rem;
+  margin: 0.2rem 0 0.45rem;
+}
+
+.paper-card p,
+.snapshot-item p {
+  margin: 0.25rem 0 0;
+}
+
+.paper-card {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.inline-actions {
+  flex-wrap: wrap;
+}
+
 .theme-toggle {
   align-items: center;
   background: var(--surface-soft);
@@ -478,6 +596,11 @@ textarea {
   .split-fields,
   .run-meta {
     grid-template-columns: 1fr;
+  }
+
+  .theme-toggle {
+    min-width: 0;
+    width: 100%;
   }
 
   .brand-card h1,

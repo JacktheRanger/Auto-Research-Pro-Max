@@ -10,10 +10,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .db import (
+    add_paper_source,
+    approve_plan,
     get_latest_run,
     get_plan,
     get_project,
-    get_settings,
+    get_run,
     init_db,
     list_papers,
     list_projects,
@@ -21,13 +23,13 @@ from .db import (
     save_plan,
     save_settings,
     create_project,
-    approve_plan,
-    get_run,
+    get_settings,
 )
 from .services.events import event_hub
 from .services.llm import generate_plan_markdown, test_connection
 from .services.papers import save_remote_paper, save_uploaded_paper
-from .services.runner import start_run
+from .services.retrieval import result_to_paper_payload, search_literature
+from .services.runner import pause_run, reject_run, resume_run, rollback_run, start_run
 from .stages import STAGE_COUNT, stage_catalog
 
 
@@ -51,7 +53,34 @@ class ProjectPayload(BaseModel):
     api_budget: str = ""
 
 
-app = FastAPI(title="Auto Research Pro Max", version="0.1.0")
+class RemotePaperPayload(BaseModel):
+    url: str
+    title: str = ""
+    notes: str = ""
+
+
+class LiteratureSearchPayload(BaseModel):
+    query: str = Field(min_length=3)
+    limit_per_provider: int = Field(default=3, ge=1, le=8)
+
+
+class LiteratureImportPayload(BaseModel):
+    provider: str
+    title: str
+    abstract: str = ""
+    year: int = 0
+    venue: str = ""
+    authors: list[str] = Field(default_factory=list)
+    doi: str = ""
+    url: str = ""
+    pdf_url: str = ""
+    external_id: str = ""
+    citation_count: int = 0
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    notes: str = ""
+
+
+app = FastAPI(title="Auto Research Pro Max", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -148,12 +177,6 @@ async def papers_upload(
     return {"paper": paper, "papers": list_papers(project_id)}
 
 
-class RemotePaperPayload(BaseModel):
-    url: str
-    title: str = ""
-    notes: str = ""
-
-
 @app.post("/api/projects/{project_id}/papers/url")
 async def papers_url(project_id: str, payload: RemotePaperPayload) -> dict[str, Any]:
     project = get_project(project_id)
@@ -163,14 +186,56 @@ async def papers_url(project_id: str, payload: RemotePaperPayload) -> dict[str, 
     return {"paper": paper, "papers": list_papers(project_id)}
 
 
+@app.post("/api/projects/{project_id}/literature/search")
+async def literature_search(project_id: str, payload: LiteratureSearchPayload) -> dict[str, Any]:
+    project = get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return search_literature(payload.query, limit_per_provider=payload.limit_per_provider)
+
+
+@app.post("/api/projects/{project_id}/papers/import")
+async def papers_import(project_id: str, payload: LiteratureImportPayload) -> dict[str, Any]:
+    project = get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    paper = add_paper_source(
+        result_to_paper_payload(
+            project_id,
+            {
+                "provider": payload.provider,
+                "title": payload.title,
+                "abstract": payload.abstract,
+                "year": payload.year,
+                "venue": payload.venue,
+                "authors": payload.authors,
+                "doi": payload.doi,
+                "url": payload.url,
+                "pdf_url": payload.pdf_url,
+                "external_id": payload.external_id,
+                "citation_count": payload.citation_count,
+                "metadata": payload.metadata,
+            },
+            notes=payload.notes,
+        )
+    )
+    return {"paper": paper, "papers": list_papers(project_id)}
+
+
 @app.post("/api/projects/{project_id}/plan/generate")
 async def plan_generate(project_id: str) -> dict[str, Any]:
     project = get_project(project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     papers = list_papers(project_id)
-    plan_markdown = generate_plan_markdown(project, papers, get_settings(), stage_catalog())
-    plan = save_plan(project_id, plan_markdown, "ready")
+    catalog = stage_catalog()
+    plan_markdown = generate_plan_markdown(project, papers, get_settings(), catalog)
+    plan = save_plan(
+        project_id,
+        plan_markdown,
+        "ready",
+        metadata_json={"stage_count": len(catalog), "approval_gates": [item["key"] for item in catalog if item.get("approval_gate")]},
+    )
     return {"plan": plan}
 
 
@@ -200,6 +265,32 @@ async def run_get(run_id: str) -> dict[str, Any]:
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
     return {"run": run, "stages": list_run_stages(run_id)}
+
+
+def _controlled_run_response(run_id: str, updated_run: dict[str, Any] | None) -> dict[str, Any]:
+    if updated_run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return {"run": updated_run, "stages": list_run_stages(run_id)}
+
+
+@app.post("/api/runs/{run_id}/control/pause")
+async def run_pause(run_id: str) -> dict[str, Any]:
+    return _controlled_run_response(run_id, pause_run(run_id))
+
+
+@app.post("/api/runs/{run_id}/control/resume")
+async def run_resume(run_id: str) -> dict[str, Any]:
+    return _controlled_run_response(run_id, resume_run(run_id))
+
+
+@app.post("/api/runs/{run_id}/control/reject")
+async def run_reject(run_id: str) -> dict[str, Any]:
+    return _controlled_run_response(run_id, reject_run(run_id))
+
+
+@app.post("/api/runs/{run_id}/control/rollback")
+async def run_rollback(run_id: str) -> dict[str, Any]:
+    return _controlled_run_response(run_id, rollback_run(run_id))
 
 
 @app.websocket("/ws/runs/{run_id}")
