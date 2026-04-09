@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { StageTimeline } from "./components/StageTimeline";
 import {
@@ -88,17 +88,17 @@ const stageLocaleCopy: Record<
     },
     paper_export: {
       label: "论文导出",
-      summary: "整理 Markdown / LaTeX / PDF handoff 所需的导出包。",
+      summary: "生成真实的 Markdown / LaTeX / BibTeX / PDF 导出文件，并附带校验报告。",
       owner: "导出管理 Agent",
     },
     peer_review: {
       label: "同行评审",
-      summary: "从 reviewer 视角做压力测试并生成修改建议。",
+      summary: "按不同 venue rubric 评审稿件，并输出高优先级修改建议。",
       owner: "评审小组",
     },
     delivery_package: {
       label: "交付包",
-      summary: "整合计划、证据、稿件状态、门控决策和下一步建议。",
+      summary: "打包最终稿件、校验报告、评审结果和可下载交付归档。",
       owner: "交付管理 Agent",
     },
   },
@@ -410,6 +410,99 @@ function paperSummaryLine(paper: Paper) {
     segments.push(paper.citation_key);
   }
   return segments.join(" · ");
+}
+
+function formatBytes(value: number) {
+  if (!Number.isFinite(value) || value <= 0) {
+    return "0 B";
+  }
+  if (value < 1024) {
+    return `${value} B`;
+  }
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} KB`;
+  }
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isFileArtifact(value: unknown): value is Record<string, unknown> {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return typeof value.path === "string" && typeof value.url === "string";
+}
+
+function renderArtifactValue(value: unknown, keyPath = "root"): ReactNode {
+  if (isFileArtifact(value)) {
+    const label = typeof value.label === "string" ? value.label : "File";
+    const kind = typeof value.kind === "string" ? value.kind : "file";
+    const sizeBytes = typeof value.size_bytes === "number" ? value.size_bytes : 0;
+    const url = typeof value.url === "string" ? value.url : "";
+    const path = typeof value.path === "string" ? value.path : "";
+    return (
+      <div className="artifact-file">
+        <strong>{label}</strong>
+        <span>
+          {kind}
+          {sizeBytes ? ` · ${formatBytes(sizeBytes)}` : ""}
+        </span>
+        {url ? (
+          <a href={url} rel="noreferrer" target="_blank">
+            {url}
+          </a>
+        ) : null}
+        {path ? <code>{path}</code> : null}
+      </div>
+    );
+  }
+  if (Array.isArray(value)) {
+    if (!value.length) {
+      return <span className="artifact-empty">[]</span>;
+    }
+    return (
+      <div className="artifact-list">
+        {value.map((item, index) => (
+          <div key={`${keyPath}-${index}`} className="artifact-list-item">
+            {renderArtifactValue(item, `${keyPath}-${index}`)}
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (isRecord(value)) {
+    const entries = Object.entries(value);
+    if (!entries.length) {
+      return <span className="artifact-empty">{`{}`}</span>;
+    }
+    return (
+      <div className="artifact-tree">
+        {entries.map(([key, nested]) => (
+          <div key={`${keyPath}-${key}`} className="artifact-row">
+            <span className="artifact-key">{key}</span>
+            <div className="artifact-value">{renderArtifactValue(nested, `${keyPath}-${key}`)}</div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (typeof value === "string") {
+    if (value.startsWith("/media/") || value.startsWith("http://") || value.startsWith("https://")) {
+      return (
+        <a href={value} rel="noreferrer" target="_blank">
+          {value}
+        </a>
+      );
+    }
+    return <span className="artifact-text">{value || "-"}</span>;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return <span className="artifact-text">{String(value)}</span>;
+  }
+  return <span className="artifact-empty">null</span>;
 }
 
 export default function App() {
@@ -1338,7 +1431,11 @@ export default function App() {
                 </div>
                 <div className="detail-block">
                   <h3>{text.artifactSnapshot}</h3>
-                  <pre className="json-surface">{prettyJson(selectedStage?.artifact_json)}</pre>
+                  {selectedStage?.artifact_json && Object.keys(selectedStage.artifact_json).length ? (
+                    <div className="artifact-surface">{renderArtifactValue(selectedStage.artifact_json)}</div>
+                  ) : (
+                    <pre className="json-surface">{prettyJson(selectedStage?.artifact_json)}</pre>
+                  )}
                 </div>
               </div>
             </section>

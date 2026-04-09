@@ -513,6 +513,78 @@ textarea {
   background: rgba(255, 255, 255, 0.04);
 }
 
+.artifact-surface {
+  background: rgba(7, 21, 26, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  display: grid;
+  gap: 0.65rem;
+  max-height: 420px;
+  overflow: auto;
+  padding: 0.9rem;
+}
+
+:root[data-theme="dark"] .artifact-surface {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.artifact-tree,
+.artifact-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.artifact-row,
+.artifact-list-item {
+  background: rgba(255, 255, 255, 0.32);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.75rem;
+}
+
+:root[data-theme="dark"] .artifact-row,
+:root[data-theme="dark"] .artifact-list-item {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.artifact-key {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.artifact-value {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.artifact-file {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.artifact-file span,
+.artifact-text,
+.artifact-empty {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.artifact-file code {
+  background: rgba(7, 21, 26, 0.06);
+  border-radius: 10px;
+  padding: 0.35rem 0.45rem;
+  word-break: break-all;
+}
+
+:root[data-theme="dark"] .artifact-file code {
+  background: rgba(255, 255, 255, 0.05);
+}
+
 .paper-card strong,
 .snapshot-item strong {
   display: block;
