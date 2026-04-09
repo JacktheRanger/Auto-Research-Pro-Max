@@ -25,6 +25,7 @@ from .events import event_hub
 from .llm import generate_stage_result
 from .retrieval import search_literature_for_project
 from .sandbox import run_experiment_sandbox
+from .validation import validate_stage_payload
 from .writing import (
     build_delivery_package_payload,
     build_paper_export_payload,
@@ -92,21 +93,58 @@ def _format_retrieval_markdown(result: dict[str, Any]) -> str:
 
 def _format_sandbox_markdown(result: dict[str, Any]) -> str:
     manifest = result.get("artifact_manifest") or []
+    expected_artifacts = result.get("expected_artifacts") or []
+    matched_artifacts = result.get("matched_artifacts") or []
     lines = [
         "# Experiment Sandbox",
         "",
         f"## Status\n- {result.get('status')}",
+        f"- Return code: {result.get('returncode')}",
+        f"- Duration seconds: {result.get('duration_seconds')}",
+        "",
+        "## Repository",
+        f"- Source type: {result.get('repo_source_type') or 'not_configured'}",
+        f"- Local path: {result.get('repo_path') or 'n/a'}",
+        f"- Git URL: {result.get('repo_url') or 'n/a'}",
+        f"- Git ref: {result.get('repo_ref') or 'n/a'}",
+        f"- Workdir: {result.get('sandbox_workdir') or '.'}",
+        "",
+        "## Commands",
+        f"- Setup: {result.get('setup_command') or 'none'}",
+        f"- Run: {result.get('run_command') or 'none'}",
         "",
         "## Policy",
         f"- Docker image: {result.get('docker_image')}",
+        f"- Base image: {result.get('base_image')}",
         f"- Timeout seconds: {result.get('timeout_seconds')}",
         f"- Allowed packages: {', '.join(result.get('allowed_packages') or []) or 'none'}",
         f"- Blocked packages: {', '.join(result.get('blocked_packages') or []) or 'none'}",
         "",
-        "## Captured Artifacts",
+        "## Expected Artifacts",
     ]
+    for item in expected_artifacts:
+        lines.append(f"- {item}")
+    if not expected_artifacts:
+        lines.append("- none")
+    lines.extend([
+        "",
+        "## Matched Artifacts",
+    ])
+    for item in matched_artifacts:
+        lines.append(f"- {item}")
+    if not matched_artifacts:
+        lines.append("- none")
+    lines.extend([
+        "",
+        "## Captured Artifacts",
+    ])
     for item in manifest:
-        lines.append(f"- {item['path']} ({item['size_bytes']} bytes)")
+        url = item.get("url") or ""
+        suffix = f" -> {url}" if url else ""
+        lines.append(f"- {item['path']} ({item['size_bytes']} bytes){suffix}")
+    stdout = result.get("stdout") or ""
+    if stdout:
+        lines.extend(["", "## stdout", "```text", stdout[:2400], "```"])
     stderr = result.get("stderr") or ""
     if stderr:
         lines.extend(["", "## stderr", "```text", stderr[:2400], "```"])
@@ -139,12 +177,26 @@ def _execute_stage_payload(
             "content_md": _format_sandbox_markdown(sandbox_result),
             "artifacts": {
                 "sandbox_request": {
+                    "repo_source_type": sandbox_result.get("repo_source_type"),
+                    "repo_path": sandbox_result.get("repo_path"),
+                    "repo_url": sandbox_result.get("repo_url"),
+                    "repo_ref": sandbox_result.get("repo_ref"),
+                    "sandbox_workdir": sandbox_result.get("sandbox_workdir"),
+                    "setup_command": sandbox_result.get("setup_command"),
+                    "run_command": sandbox_result.get("run_command"),
+                    "expected_artifacts": sandbox_result.get("expected_artifacts") or [],
                     "requested_packages": sandbox_result.get("requested_packages") or [],
+                    "allowed_packages": sandbox_result.get("allowed_packages") or [],
+                    "blocked_packages": sandbox_result.get("blocked_packages") or [],
                     "timeout_seconds": sandbox_result.get("timeout_seconds"),
                 },
                 "sandbox_result": {
                     "status": sandbox_result.get("status"),
                     "returncode": sandbox_result.get("returncode"),
+                    "duration_seconds": sandbox_result.get("duration_seconds"),
+                    "docker_image": sandbox_result.get("docker_image"),
+                    "base_image": sandbox_result.get("base_image"),
+                    "matched_artifacts": sandbox_result.get("matched_artifacts") or [],
                     "stdout": sandbox_result.get("stdout", "")[:2000],
                     "stderr": sandbox_result.get("stderr", "")[:2000],
                 },
@@ -280,6 +332,34 @@ async def execute_run(run_id: str, settings: dict[str, Any]) -> None:
                 prior_outputs,
                 settings,
             )
+            validation = validate_stage_payload(stage, payload)
+            stage_metadata = dict(stage_record.get("metadata_json") or {})
+            stage_metadata["validation"] = validation
+            if not validation["ok"]:
+                error_message = "Stage validation failed: " + "; ".join(validation["errors"])
+                update_stage(
+                    run_id,
+                    stage.index,
+                    status="failed",
+                    notes=payload.get("notes") or error_message,
+                    content_md=payload.get("content_md") or "",
+                    artifact_json=payload.get("artifacts") or {},
+                    metadata_json=stage_metadata,
+                    error=error_message,
+                )
+                update_run_status(run_id, "failed", stage.index, error_message)
+                set_project_run_complete(run["project_id"], "failed")
+                append_run_event(
+                    run_id,
+                    {
+                        "action": "stage_validation_failed",
+                        "stage_index": stage.index,
+                        "stage_key": stage.key,
+                        "errors": validation["errors"],
+                    },
+                )
+                await _emit(run_id)
+                return
 
             update_stage(
                 run_id,
@@ -288,11 +368,20 @@ async def execute_run(run_id: str, settings: dict[str, Any]) -> None:
                 notes=payload["notes"],
                 content_md=payload["content_md"],
                 artifact_json=payload.get("artifacts") or {},
+                metadata_json=stage_metadata,
                 completed=True,
                 gate_status="pending" if stage.approval_gate else "",
             )
             update_run(run_id, status="running", current_stage_index=stage.index, error="")
-            append_run_event(run_id, {"action": "stage_complete", "stage_index": stage.index, "stage_key": stage.key})
+            append_run_event(
+                run_id,
+                {
+                    "action": "stage_complete",
+                    "stage_index": stage.index,
+                    "stage_key": stage.key,
+                    "validation_warnings": validation.get("warnings") or [],
+                },
+            )
             await _emit(run_id)
 
             if stage.approval_gate:

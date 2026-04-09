@@ -300,7 +300,7 @@ PIPELINE_STAGES: tuple[StageDefinition, ...] = (
         index=8,
         key="experiment_sandbox",
         label="Experiment Sandbox",
-        summary="Execute a real Docker-isolated experiment stub with timeout, allowlisted packages, and captured artifacts.",
+        summary="Execute repository-aware setup and benchmark commands in Docker with timeout, allowlisted packages, and captured artifacts.",
         owner="Sandbox Runner",
         prompt_focus=(
             "Run the proposed experiment in a Docker sandbox, capture outputs, and summarize what actually happened."

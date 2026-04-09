@@ -8,6 +8,7 @@ import {
   type Paper,
   type Plan,
   type Project,
+  type ProjectExecutionPayload,
   type Run,
   type RunStage,
   type RuntimeInfo,
@@ -63,7 +64,7 @@ const stageLocaleCopy: Record<
     },
     experiment_sandbox: {
       label: "实验沙箱",
-      summary: "在 Docker 中真实执行受控实验 stub，启用超时、依赖白名单和产物采集。",
+      summary: "在 Docker 中执行仓库感知的准备命令与 benchmark 命令，启用超时、依赖白名单和产物采集。",
       owner: "Sandbox Runner",
     },
     execution_review: {
@@ -145,6 +146,25 @@ const uiCopy = {
     computeBudgetPlaceholder: "CPU only / 1x4090 / A100 x2",
     apiBudget: "API Budget",
     apiBudgetPlaceholder: "$20 / no hard cap / internal",
+    executionConfig: "Execution Sandbox",
+    executionConfigBody:
+      "Point the sandbox at a local repo path or a git URL, then provide the setup and run commands. Local path takes priority when both are set.",
+    repoPath: "Local Repo Path",
+    repoPathPlaceholder: "~/code/my-benchmark or ../repo",
+    repoUrl: "Git Repo URL",
+    repoUrlPlaceholder: "https://github.com/org/repo.git",
+    repoRef: "Git Ref",
+    repoRefPlaceholder: "main / tag / commit",
+    sandboxWorkdir: "Sandbox Workdir",
+    sandboxWorkdirPlaceholder: "relative/path inside the repo",
+    setupCommand: "Setup Command",
+    setupCommandPlaceholder:
+      "python -m venv .venv && .venv/bin/pip install -r requirements.txt",
+    runCommand: "Run Command",
+    runCommandPlaceholder: "pytest -q / python train.py / make benchmark",
+    expectedArtifacts: "Expected Artifacts",
+    expectedArtifactsPlaceholder: "One glob per line, for example:\nresults/**/*.json\noutputs/*.csv",
+    saveExecutionConfig: "Save Execution Config",
     paperIntake: "Paper Intake",
     paperIntakeBody:
       "Add local PDFs, remote URLs, or import results from live literature search before generating the plan.",
@@ -189,6 +209,7 @@ const uiCopy = {
     cn: "CN",
     settingsSaved: "Settings saved.",
     projectCreated: "Project created.",
+    executionConfigSaved: "Execution config saved.",
     localPaperAdded: "Local paper added.",
     remotePaperAdded: "Remote paper added.",
     literatureImported: "Literature result imported.",
@@ -270,6 +291,25 @@ const uiCopy = {
     computeBudgetPlaceholder: "仅 CPU / 1x4090 / A100 x2",
     apiBudget: "API 预算",
     apiBudgetPlaceholder: "$20 / 无硬上限 / 内部额度",
+    executionConfig: "执行沙箱配置",
+    executionConfigBody:
+      "给沙箱配置本地仓库路径或 git URL，再填写准备命令和运行命令。如果两者都填写，优先使用本地路径。",
+    repoPath: "本地仓库路径",
+    repoPathPlaceholder: "~/code/my-benchmark 或 ../repo",
+    repoUrl: "Git 仓库 URL",
+    repoUrlPlaceholder: "https://github.com/org/repo.git",
+    repoRef: "Git 引用",
+    repoRefPlaceholder: "main / tag / commit",
+    sandboxWorkdir: "沙箱工作目录",
+    sandboxWorkdirPlaceholder: "仓库内相对路径",
+    setupCommand: "准备命令",
+    setupCommandPlaceholder:
+      "python -m venv .venv && .venv/bin/pip install -r requirements.txt",
+    runCommand: "运行命令",
+    runCommandPlaceholder: "pytest -q / python train.py / make benchmark",
+    expectedArtifacts: "期望产物",
+    expectedArtifactsPlaceholder: "每行一个 glob，例如：\nresults/**/*.json\noutputs/*.csv",
+    saveExecutionConfig: "保存执行配置",
     paperIntake: "论文输入",
     paperIntakeBody:
       "在生成计划前，可以添加本地 PDF、远程 URL，或从实时文献检索结果中直接导入。",
@@ -312,6 +352,7 @@ const uiCopy = {
     cn: "CN",
     settingsSaved: "设置已保存。",
     projectCreated: "项目已创建。",
+    executionConfigSaved: "执行配置已保存。",
     localPaperAdded: "本地论文已添加。",
     remotePaperAdded: "远程论文已添加。",
     literatureImported: "检索结果已导入。",
@@ -377,12 +418,56 @@ const emptyProjectForm = {
   api_budget: "",
 };
 
+const emptyExecutionForm = {
+  repo_path: "",
+  repo_url: "",
+  repo_ref: "",
+  sandbox_workdir: "",
+  sandbox_setup_command: "",
+  sandbox_run_command: "",
+  expected_artifacts_text: "",
+};
+
 type ProjectDetail = {
   project: Project;
   papers: Paper[];
   plan: Plan | null;
   latest_run: Run | null;
 };
+
+function parseExpectedArtifacts(value: string): string[] {
+  return value
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function projectToExecutionForm(project: Project | null) {
+  if (!project) {
+    return emptyExecutionForm;
+  }
+  return {
+    repo_path: project.repo_path || "",
+    repo_url: project.repo_url || "",
+    repo_ref: project.repo_ref || "",
+    sandbox_workdir: project.sandbox_workdir || "",
+    sandbox_setup_command: project.sandbox_setup_command || "",
+    sandbox_run_command: project.sandbox_run_command || "",
+    expected_artifacts_text: (project.expected_artifacts || []).join("\n"),
+  };
+}
+
+function executionPayloadFromForm(form: typeof emptyExecutionForm): ProjectExecutionPayload {
+  return {
+    repo_path: form.repo_path.trim(),
+    repo_url: form.repo_url.trim(),
+    repo_ref: form.repo_ref.trim(),
+    sandbox_workdir: form.sandbox_workdir.trim(),
+    sandbox_setup_command: form.sandbox_setup_command.trim(),
+    sandbox_run_command: form.sandbox_run_command.trim(),
+    expected_artifacts: parseExpectedArtifacts(form.expected_artifacts_text),
+  };
+}
 
 function prettyJson(value: unknown) {
   return JSON.stringify(value ?? {}, null, 2);
@@ -524,6 +609,7 @@ export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [stageCatalog, setStageCatalog] = useState<StageCatalogItem[]>([]);
   const [projectForm, setProjectForm] = useState(emptyProjectForm);
+  const [executionForm, setExecutionForm] = useState(emptyExecutionForm);
   const [urlPaper, setUrlPaper] = useState({ url: "", title: "", notes: "" });
   const [uploadNotes, setUploadNotes] = useState("");
   const [literatureQuery, setLiteratureQuery] = useState("");
@@ -625,6 +711,10 @@ export default function App() {
     };
   }, [run?.id, run?.status, text.wsConnected, text.wsDisconnected]);
 
+  useEffect(() => {
+    setExecutionForm(projectToExecutionForm(projectDetail?.project ?? null));
+  }, [projectDetail?.project]);
+
   const selectedStage = useMemo(
     () => runStages.find((item) => item.stage_index === selectedStageIndex),
     [runStages, selectedStageIndex],
@@ -675,6 +765,19 @@ export default function App() {
     setProjectForm(emptyProjectForm);
     setStatusMessage(text.projectCreated);
     await loadProject(created.project.id);
+  }
+
+  async function handleSaveExecutionConfig(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selectedProjectId) {
+      return;
+    }
+    const payload = executionPayloadFromForm(executionForm);
+    const result = await api.updateProjectExecutionConfig(selectedProjectId, payload);
+    setProjectDetail((current) => (current ? { ...current, project: result.project } : current));
+    setExecutionForm(projectToExecutionForm(result.project));
+    setStatusMessage(text.executionConfigSaved);
+    await refreshProjects();
   }
 
   async function handleUploadPaper(event: React.FormEvent<HTMLFormElement>) {
@@ -1275,10 +1378,90 @@ export default function App() {
                 ))}
               </div>
             </section>
-          </section>
+	          </section>
 
-          <section className="grid two-up">
-            <section className="panel">
+	          <section className="panel">
+	            <div className="panel-header">
+	              <h2>{text.executionConfig}</h2>
+	              <button disabled={!selectedProjectId} form="execution-config-form" type="submit">
+	                {text.saveExecutionConfig}
+	              </button>
+	            </div>
+	            <p className="muted">{text.executionConfigBody}</p>
+	            <form className="stacked-form" id="execution-config-form" onSubmit={handleSaveExecutionConfig}>
+	              <div className="split-fields">
+	                <label>
+	                  {text.repoPath}
+	                  <input
+	                    value={executionForm.repo_path}
+	                    onChange={(event) => setExecutionForm({ ...executionForm, repo_path: event.target.value })}
+	                    placeholder={text.repoPathPlaceholder}
+	                  />
+	                </label>
+	                <label>
+	                  {text.repoUrl}
+	                  <input
+	                    value={executionForm.repo_url}
+	                    onChange={(event) => setExecutionForm({ ...executionForm, repo_url: event.target.value })}
+	                    placeholder={text.repoUrlPlaceholder}
+	                  />
+	                </label>
+	              </div>
+	              <div className="split-fields">
+	                <label>
+	                  {text.repoRef}
+	                  <input
+	                    value={executionForm.repo_ref}
+	                    onChange={(event) => setExecutionForm({ ...executionForm, repo_ref: event.target.value })}
+	                    placeholder={text.repoRefPlaceholder}
+	                  />
+	                </label>
+	                <label>
+	                  {text.sandboxWorkdir}
+	                  <input
+	                    value={executionForm.sandbox_workdir}
+	                    onChange={(event) =>
+	                      setExecutionForm({ ...executionForm, sandbox_workdir: event.target.value })
+	                    }
+	                    placeholder={text.sandboxWorkdirPlaceholder}
+	                  />
+	                </label>
+	              </div>
+	              <label>
+	                {text.setupCommand}
+	                <textarea
+	                  value={executionForm.sandbox_setup_command}
+	                  onChange={(event) =>
+	                    setExecutionForm({ ...executionForm, sandbox_setup_command: event.target.value })
+	                  }
+	                  placeholder={text.setupCommandPlaceholder}
+	                />
+	              </label>
+	              <label>
+	                {text.runCommand}
+	                <textarea
+	                  value={executionForm.sandbox_run_command}
+	                  onChange={(event) =>
+	                    setExecutionForm({ ...executionForm, sandbox_run_command: event.target.value })
+	                  }
+	                  placeholder={text.runCommandPlaceholder}
+	                />
+	              </label>
+	              <label>
+	                {text.expectedArtifacts}
+	                <textarea
+	                  value={executionForm.expected_artifacts_text}
+	                  onChange={(event) =>
+	                    setExecutionForm({ ...executionForm, expected_artifacts_text: event.target.value })
+	                  }
+	                  placeholder={text.expectedArtifactsPlaceholder}
+	                />
+	              </label>
+	            </form>
+	          </section>
+
+	          <section className="grid two-up">
+	            <section className="panel">
               <div className="panel-header">
                 <h2>{text.planningGate}</h2>
                 <div className="inline-actions">

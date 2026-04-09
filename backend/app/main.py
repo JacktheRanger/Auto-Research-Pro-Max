@@ -24,6 +24,7 @@ from .db import (
     save_settings,
     create_project,
     get_settings,
+    update_project_execution_config,
 )
 from .services.events import event_hub
 from .services.grounding import retrieve_grounded_snippets
@@ -52,6 +53,23 @@ class ProjectPayload(BaseModel):
     constraints_text: str = ""
     compute_budget: str = ""
     api_budget: str = ""
+    repo_path: str = ""
+    repo_url: str = ""
+    repo_ref: str = ""
+    sandbox_workdir: str = ""
+    sandbox_setup_command: str = ""
+    sandbox_run_command: str = ""
+    expected_artifacts: list[str] = Field(default_factory=list)
+
+
+class ProjectExecutionPayload(BaseModel):
+    repo_path: str = ""
+    repo_url: str = ""
+    repo_ref: str = ""
+    sandbox_workdir: str = ""
+    sandbox_setup_command: str = ""
+    sandbox_run_command: str = ""
+    expected_artifacts: list[str] = Field(default_factory=list)
 
 
 class RemotePaperPayload(BaseModel):
@@ -168,6 +186,17 @@ async def projects_get(project_id: str) -> dict[str, Any]:
         "plan": get_plan(project_id),
         "latest_run": get_latest_run(project_id),
     }
+
+
+@app.put("/api/projects/{project_id}/execution-config")
+async def projects_update_execution_config(project_id: str, payload: ProjectExecutionPayload) -> dict[str, Any]:
+    project = get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    updated = update_project_execution_config(project_id, payload.model_dump())
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"project": updated}
 
 
 @app.post("/api/projects/{project_id}/papers/upload")
