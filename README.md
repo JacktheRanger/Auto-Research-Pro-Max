@@ -7,7 +7,7 @@
 
 ## English
 
-Auto Research Pro Max is a local-first research workspace for turning an idea into a paper-grounded plan, getting explicit approval on that plan, and tracking staged execution in one web interface. The goal is not to hide the workflow behind a black-box agent run, but to make planning, grounding, and progress visible.
+Auto Research Pro Max is the first autonomous platform that takes you from idea to research to paper, with an integrated GUI. The goal is not to hide the workflow behind a black-box agent run, but to make planning, grounding, and progress visible.
 
 ## Demo
 
