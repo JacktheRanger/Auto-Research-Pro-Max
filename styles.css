@@ -30,6 +30,7 @@
   --secondary-text: #173038;
 }
 
+/*
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #07151a;
@@ -61,6 +62,7 @@
     --secondary-text: #f5f0e7;
   }
 }
+*/
 
 * {
   box-sizing: border-box;
