@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.svg" alt="Auto Research Pro Max Logo" width="120" height="120" />
+  <img src="LOGO/logo.svg" alt="Auto Research Pro Max Logo" width="120" height="120" />
 </p>
 
 # Auto Research Pro Max
@@ -17,7 +17,7 @@ Auto Research Pro Max is the first autonomous platform that takes you from idea 
 
 ## Demo
 
-![Auto Research Pro Max screenshot](./page-long.png)
+![Auto Research Pro Max screenshot](./assets/images/page-long.png)
 
 ## What It Does
 
@@ -186,7 +186,7 @@ Auto Research Pro Max 是一个本地优先的研究工作台，用来把一个�
 
 ## 演示
 
-![Auto Research Pro Max 中文界面截图](./page-long-cn.png)
+![Auto Research Pro Max 中文界面截图](./assets/images/page-long-cn.png)
 
 ## 功能简介
 
