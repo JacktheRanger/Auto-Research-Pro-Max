@@ -1,40 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
   <defs>
-    <linearGradient id="grad-orange" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="grad-primary" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#f2b05e" />
-      <stop offset="100%" stop-color="#c75d3d" />
+      <stop offset="100%" stop-color="#d9823b" />
     </linearGradient>
-    <linearGradient id="grad-mint" x1="0%" y1="100%" x2="100%" y2="0%">
+    <linearGradient id="grad-secondary" x1="100%" y1="100%" x2="0%" y2="0%">
       <stop offset="0%" stop-color="#5bc0a8" />
       <stop offset="100%" stop-color="#1e8f7a" />
     </linearGradient>
-    <linearGradient id="grad-dark" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#13232b" />
-      <stop offset="100%" stop-color="#07151a" />
-    </linearGradient>
-    <radialGradient id="glow-mint" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#5bc0a8" stop-opacity="0.25" />
-      <stop offset="100%" stop-color="#5bc0a8" stop-opacity="0" />
-    </radialGradient>
-    <radialGradient id="glow-orange" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#f2b05e" stop-opacity="0.25" />
-      <stop offset="100%" stop-color="#f2b05e" stop-opacity="0" />
-    </radialGradient>
   </defs>
 
-  <!-- Ambient Glow Without Filters (iOS Safari Safe) -->
-  <circle cx="85" cy="120" r="70" fill="url(#glow-mint)" />
-  <circle cx="155" cy="120" r="70" fill="url(#glow-orange)" />
-
-  <!-- Infinity Loops / Automation Engine -->
-  <path d="M 70 120 C 70 60, 120 60, 120 120 C 120 180, 170 180, 170 120" stroke="url(#grad-mint)" stroke-width="22" stroke-linecap="round" />
-  <path d="M 170 120 C 170 60, 120 60, 120 120 C 120 180, 70 180, 70 120" stroke="url(#grad-orange)" stroke-width="22" stroke-linecap="round" opacity="0.9" />
-
-  <!-- Central Processing Hub -->
-  <circle cx="120" cy="120" r="28" fill="url(#grad-dark)" />
-  <circle cx="120" cy="120" r="22" fill="none" stroke="#ffffff" stroke-width="2" stroke-dasharray="6 6" />
+  <!-- Large Spark -->
+  <path d="M 60 15 C 60 50, 70 60, 105 60 C 70 60, 60 70, 60 105 C 60 70, 50 60, 15 60 C 50 60, 60 50, 60 15 Z" fill="url(#grad-primary)" />
   
-  <!-- Mini Chart / Pro Max Spark -->
-  <path d="M 110 126 L 120 114 L 128 118 L 140 102" fill="none" stroke="#f2b05e" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
-  <circle cx="140" cy="102" r="3" fill="#ffffff" />
+  <!-- Smaller Internal Spark -->
+  <path d="M 60 40 C 60 55, 65 60, 80 60 C 65 60, 60 65, 60 80 C 60 65, 55 60, 40 60 C 55 60, 60 55, 60 40 Z" fill="url(#grad-secondary)" />
+
+  <circle cx="60" cy="60" r="4" fill="#ffffff" />
 </svg>
