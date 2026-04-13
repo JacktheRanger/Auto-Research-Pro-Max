@@ -130,8 +130,9 @@ body::after {
   padding-bottom: 0.1em;
   display: block;
   width: fit-content;
-  margin-left: auto;
-  margin-right: auto;
+  margin: 0 auto;
+  font-size: clamp(4rem, 8vw, 7rem);
+  line-height: 0.95;
 }
 
 .section-title {
@@ -144,11 +145,11 @@ body::after {
   padding-bottom: 0.1em;
   display: block;
   width: fit-content;
-  margin-left: auto;
-  margin-right: auto;
+  margin: 0 auto 2rem auto;
   text-align: center;
   transform: scaleX(1.15); /* Stretch individual letters to be wider */
   transform-origin: center;
+  font-size: clamp(2rem, 5vw, 3rem);
 }
 
 /* Disable stretching for Chinese characters */
@@ -217,10 +218,75 @@ body::after {
 /* Glass Panels */
 .page-shell {
   display: grid;
-  gap: 2rem;
-  padding: 2rem 1.5rem;
+  gap: 1.5rem; /* 稍微减少卡片/组件间的间距 */
+  padding: 0.7rem 1.5rem 2rem; /* 桌面端顶部同步微调为 0.7rem */
   max-width: 1600px;
   margin: 0 auto;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem; /* 稍微减少卡片间的垂直间距 */
+}
+
+.lang-container {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.hero-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 3rem 1rem 1rem;
+}
+
+.hero-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.hero-copy img {
+  width: 80px;
+  height: 80px;
+  margin-bottom: -0.5rem;
+  margin-top: 1.5rem;
+}
+
+.hero-copy h2 {
+  max-width: 850px;
+  text-align: center;
+  margin: 1.5rem auto 0 auto;
+  font-size: clamp(1.1rem, 2vw, 1.45rem);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.inline-actions {
+  display: flex;
+  margin-top: 2.5rem;
+  justify-content: center;
+  gap: 1rem;
+}
+
+#bot-title {
+  font-size: clamp(2.2rem, 6vw, 3.5rem);
+  margin-bottom: 1rem;
+}
+
+.privacy-box {
+  background: var(--surface-soft);
+  padding: 2rem;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  text-align: left;
+  width: 100%;
+  max-width: 800px;
 }
 
 .panel, .brand-card, .hero {
@@ -380,11 +446,113 @@ a:hover {
   box-shadow: 0 4px 16px rgba(217, 130, 59, 0.4);
 }
 
+.workflow-grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+.check-list li {
+  margin-bottom: 0.8rem;
+  position: relative;
+}
+
+/* 仅精准控制切换按钮与其下方内容的距离 */
+.lang-container {
+  margin-bottom: -0.8rem; /* 配合 1.5rem gap，使下方实际间距为 0.7rem */
+}
+
 @media (max-width: 900px) {
   .grid.two-up {
     grid-template-columns: 1fr;
+    gap: 0.8rem; /* 同步缩减 Pipeline 部分的卡片间距 */
+  }
+  .page-shell {
+    padding: 0.3rem 1.5rem 2rem; /* 移动端顶部微调为 0.3rem */
+    gap: 1.5rem; /* 恢复原始间距并微调 */
+  }
+  .app-shell {
+    gap: 1.5rem; /* 恢复原始间距并微调 */
+  }
+  .lang-container {
+    margin-bottom: -1.2rem; /* 配合 1.5rem gap，使下方实际间距为 0.3rem */
   }
   .panel, .brand-card, .hero {
-    padding: 2rem 1.5rem;
+    padding: 2rem 1.5rem; /* 恢复原始移动端内边距 */
   }
+  .hero {
+    padding-top: 3rem; /* 恢复原始高度 */
+  }
+  .section-title {
+    font-size: 1.7rem !important;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .stage-card h3 {
+    font-size: 1.2rem;
+    font-weight: 700;
+  }
+  .hero-brand {
+    font-size: 3.5rem !important;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .workflow-grid {
+    gap: 0.8rem; /* 仅移动端收紧子卡片间距 */
+  }
+}
+
+/* Back to Top Button */
+#back-to-top {
+  position: fixed;
+  bottom: 2.5rem;
+  left: 50%;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--bg-panel-strong);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--line);
+  border-top-color: var(--glass-top);
+  border-left-color: var(--glass-left);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--shadow), inset 0 1px 0 var(--glass-inset);
+  transform: translateX(-50%) translateY(20px);
+}
+
+#back-to-top.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+#back-to-top:hover {
+  background: var(--accent);
+  color: var(--button-text);
+  transform: translateX(-50%) translateY(-5px);
+  box-shadow: 0 12px 32px rgba(217, 130, 59, 0.4);
+  border-color: var(--accent-strong);
+}
+
+#back-to-top svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.3s ease;
+}
+
+#back-to-top:hover svg {
+  transform: translateY(-2px);
 }
