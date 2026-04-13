@@ -1,6 +1,8 @@
 # Auto Research Pro Max
 <a id="top"></a>
 
+🌐 **Website**: [jacktheranger.github.io/Auto-Research-Pro-Max](https://jacktheranger.github.io/Auto-Research-Pro-Max)
+
 [English](#english) | [中文](#中文)
 
 ---
