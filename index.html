@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="LOGO/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@62.5..100,400..900&family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <style>
     /* Additional custom styles for new sections */
@@ -46,8 +46,8 @@
         <div class="hero-copy" style="align-items: center; text-align: center;">
           <span class="eyebrow" id="eyebrow">The Autonomous Workbench</span>
           <img src="LOGO/logo.svg" alt="Auto Research Pro Max Logo" style="width: 80px; height: 80px; margin-bottom: -0.5rem; margin-top: 1.5rem;" />
-          <h1 class="hero-brand" style="font-size: clamp(4rem, 8vw, 7rem); line-height: 0.95; margin: 0;">Auto Research<br>Pro Max</h1>
-          <h2 id="hero-h2" style="max-width: 850px; text-align: center; margin: 0 auto; margin-top: 1.5rem;">Plan-gated research GUI with retrieval, sandboxing, and approval loops. Start from an idea, ground it with papers, approve the plan, and control staged execution in one place.</h2>
+          <h1 class="hero-brand" id="brand-title" style="font-size: clamp(4rem, 8vw, 7rem); line-height: 0.95; margin: 0;">Auto Research<br>Pro Max</h1>
+          <h2 id="hero-h2" style="max-width: 850px; text-align: center; margin: 1.5rem auto 0 auto; block-size: auto;">Plan-gated research GUI with retrieval, sandboxing, and approval loops. Start from an idea, ground it with papers, approve the plan, and control staged execution in one place.</h2>
           <div class="inline-actions" style="margin-top: 2.5rem; justify-content: center; gap: 1rem;">
             <a href="https://github.com/JacktheRanger/Auto-Research-Pro-Max" target="_blank" style="text-decoration: none;">
               <button id="btn-github">View on GitHub</button>
@@ -61,8 +61,8 @@
       </section>
 
       <section class="panel" id="features">
-        <div class="panel-header" style="margin-bottom: 2rem; justify-content: center;">
-          <h2 class="hero-brand" id="title-features" style="font-size: 3rem; margin: 0;">Comprehensive Research Pipeline</h2>
+        <div class="panel-header" style="margin-bottom: 2rem; display: flex; justify-content: center;">
+          <h2 class="section-title" id="title-features" style="font-size: 3rem; margin: 0 auto;">Comprehensive Research Pipeline</h2>
         </div>
         
         <div class="grid two-up">
@@ -94,7 +94,7 @@
       </section>
 
       <section class="panel" style="background: var(--bg-panel-strong);">
-        <h2 class="hero-brand" id="flow-title" style="font-size: 3rem; margin-bottom: 2rem; display: block; text-align: center;">How It Works</h2>
+        <h2 class="section-title" id="flow-title" style="font-size: 3rem; margin: 0 auto 2rem auto;">How It Works</h2>
         <div class="workflow-grid">
           <div class="stage-card" style="background: var(--bg-panel);">
             <div class="stage-index">1</div>
@@ -129,12 +129,12 @@
         </div>
       </section>
 
-      <section class="panel">
-        <h2 class="hero-brand" id="privacy-title" style="font-size: 3rem; margin: 0 0 1.5rem 0; display: block;">Privacy & Local-First</h2>
-        <p id="privacy-desc" style="font-size: 1.15rem; color: var(--muted); line-height: 1.6; max-width: 800px; margin-bottom: 2rem;">
+      <section class="panel" style="display: flex; flex-direction: column; align-items: center; text-align: center;">
+        <h2 class="section-title" id="privacy-title" style="font-size: 3rem; margin: 0 auto 1.5rem auto;">Privacy & Local-First</h2>
+        <p id="privacy-desc" style="font-size: 1.15rem; color: var(--muted); line-height: 1.6; max-width: 800px; margin: 0 auto 2rem auto;">
           Your research context belongs to you. Auto Research Pro Max is built with local isolation natively in mind.
         </p>
-        <div style="background: var(--surface-soft); padding: 2rem; border-radius: 20px; border: 1px solid var(--line);">
+        <div style="background: var(--surface-soft); padding: 2rem; border-radius: 20px; border: 1px solid var(--line); text-align: left; width: 100%; max-width: 800px;">
           <ul class="contract-list check-list" style="color: var(--text); font-size: 1.1rem; line-height: 1.8; margin: 0; padding-left: 20px;">
             <li id="priv-1"><strong>Local Storage:</strong> DB state, plans, running outputs, and artifacts are all stored in the local SQLite database.</li>
             <li id="priv-2"><strong>Offline Fallback:</strong> If no API key is provided, the UI functions perfectly using deterministic fallback text.</li>
@@ -145,7 +145,7 @@
       </section>
 
       <section class="panel brand-card" style="margin-top: 1rem;">
-        <h1 class="hero-brand" id="bot-title" style="font-size: 3.5rem; margin-bottom: 1rem; display: block; text-align: center;">Transform your research workflow.</h1>
+        <h1 class="section-title" id="bot-title" style="font-size: 3.5rem; margin: 0 auto 1rem auto;">Transform your research workflow.</h1>
         <p id="bot-desc" style="text-align: center; color: var(--muted); max-width: 600px; margin: 0 auto 2rem; line-height: 1.6; font-size: 1.1rem;">
           Everything you need to orchestrate autonomous research, complete with human-in-the-loop gates so the system does the work but you make the calls.
         </p>
@@ -165,6 +165,7 @@
 
   <script>
     const dict = {
+      "brand-title": { en: "Auto Research<br>Pro Max", cn: "Auto Research<br>Pro Max" },
       "eyebrow": { en: "The Autonomous Workbench", cn: "自主研究工作台" },
       "hero-h2": { en: "Plan-gated research GUI with retrieval, sandboxing, and approval loops. Start from an idea, ground it with papers, approve the plan, and control staged execution in one place.", cn: "带有前置计划审批、真实检索、沙箱执行与人工审批回路的研究平台 GUI。<br>从一个想法出发，基于论文建立认知上下文，完成计划审核后，在同一工作区内掌控整个执行链路。" },
       "btn-github": { en: "View on GitHub", cn: "访问 GitHub" },

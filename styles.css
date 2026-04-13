@@ -128,7 +128,32 @@ body::after {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   padding-bottom: 0.1em;
-  display: inline-block; /* Support gradient clipping better */
+  display: block;
+  width: fit-content;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.section-title {
+  font-family: "Instrument Serif", serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  background: var(--text-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  padding-bottom: 0.1em;
+  display: block;
+  width: fit-content;
+  margin-left: auto;
+  margin-right: auto;
+  transform: scaleX(1.15); /* Stretch individual letters to be wider */
+  transform-origin: center;
+}
+
+/* Disable stretching for Chinese characters */
+[lang="zh-CN"] .section-title,
+[lang="zh-CN"] .hero-brand {
+  transform: none !important;
 }
 
 .eyebrow {
