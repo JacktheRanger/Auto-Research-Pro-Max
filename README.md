@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.svg" alt="Auto Research Pro Max Logo" width="120" height="120" />
+</p>
+
 # Auto Research Pro Max
 <a id="top"></a>
 
