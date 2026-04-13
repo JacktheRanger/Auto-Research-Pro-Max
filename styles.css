@@ -177,7 +177,7 @@ body::after {
 
 .demo-img {
   width: 100%;
-  max-width: 1100px;
+  max-width: 1400px;
   border-radius: 20px;
   box-shadow: var(--shadow);
   margin-top: 3rem;
