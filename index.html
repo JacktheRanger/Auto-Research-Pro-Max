@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auto Research Pro Max</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* Additional custom styles for new sections */
+    .workflow-grid {
+      display: grid;
+      gap: 1.5rem;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+    .check-list li {
+      margin-bottom: 0.8rem;
+      position: relative;
+    }
+    .hero-center {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 3rem 1rem 1rem;
+    }
+    .demo-img {
+      width: 100%;
+      max-width: 1100px;
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      margin-top: 3rem;
+      border: 1px solid var(--line);
+      aspect-ratio: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-shell">
+    <header style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
+      <div class="theme-toggle">
+        <button id="lang-en" class="theme-option active" onclick="setLang('en')">EN</button>
+        <button id="lang-cn" class="theme-option" onclick="setLang('cn')">CN</button>
+      </div>
+    </header>
+
+    <main class="app-shell" style="grid-template-columns: 1fr; display: grid; gap: 2rem;">
+      <section class="hero hero-center main-column">
+        <div class="hero-copy" style="align-items: center; text-align: center;">
+          <span class="eyebrow" id="eyebrow">The Autonomous Workbench</span>
+          <h1 class="hero-brand">Auto Research<br>Pro Max</h1>
+          <h2 id="hero-h2" style="max-width: 850px; text-align: center; margin: 0 auto;">Plan-gated research GUI with retrieval, sandboxing, and approval loops. Start from an idea, ground it with papers, approve the plan, and control staged execution in one place.</h2>
+          <div class="inline-actions" style="margin-top: 2.5rem; justify-content: center; gap: 1rem;">
+            <a href="https://github.com/JacktheRanger/Auto-Research-Pro-Max" target="_blank" style="text-decoration: none;">
+              <button id="btn-github">View on GitHub</button>
+            </a>
+            <a href="#features" style="text-decoration: none;">
+              <button class="secondary" id="btn-explore">Explore Features</button>
+            </a>
+          </div>
+        </div>
+        <img id="demo-image" class="demo-img" src="page-long.png" alt="Demo Interface" />
+      </section>
+
+      <section class="panel" id="features">
+        <div class="panel-header" style="margin-bottom: 2rem; justify-content: center;">
+          <h2 id="title-features" style="font-family: 'Instrument Serif', serif; font-size: 2.8rem; font-weight: 400; margin: 0;">Comprehensive Research Pipeline</h2>
+        </div>
+        
+        <div class="grid two-up">
+          <div class="stage-card">
+            <h3 id="ft1-title">Mandatory Brief Intake</h3>
+            <p id="ft1-desc">Before execution, outline your title, idea, background, direction, goals, constraints, and must-read papers. No implicit black-box prompting.</p>
+          </div>
+          <div class="stage-card">
+            <h3 id="ft2-title">Hybrid Grounding Engine</h3>
+            <p id="ft2-desc">Upload local PDFs and provide remote paper URLs simultaneously. We enrich metadata (DOI, venue, authors) and automatically chunk/embed for retrieval.</p>
+          </div>
+          <div class="stage-card">
+            <h3 id="ft3-title">Plan-Gated Execution</h3>
+            <p id="ft3-desc">The system drafts an experiment and execution plan first. It must pass an explicit human approval gate before moving to sandbox run.</p>
+          </div>
+          <div class="stage-card">
+            <h3 id="ft4-title">Repository-Aware Sandboxing</h3>
+            <p id="ft4-desc">Attach a local repo path or Git URL alongside setup/run commands. The sandbox executes real-world workloads, tracks timeouts, and collects artifacts.</p>
+          </div>
+          <div class="stage-card">
+            <h3 id="ft5-title">Live Pipeline Tracking</h3>
+            <p id="ft5-desc">Monitor the real-time progress of 15+ sub-stages via WebSocket updates, pause, resume, or rollback when an approval gate is reached.</p>
+          </div>
+          <div class="stage-card">
+            <h3 id="ft6-title">Complete Deliverables</h3>
+            <p id="ft6-desc">Export true Markdown, LaTeX, BibTeX files, compiled PDF manuscripts, and a full zipped delivery bundle containing all research products.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" style="background: var(--bg-panel-strong);">
+        <h2 class="hero-brand" id="flow-title" style="font-size: 3rem; margin-bottom: 2rem; text-align: center; font-family: 'Instrument Serif', serif;">How It Works</h2>
+        <div class="workflow-grid">
+          <div class="stage-card" style="background: var(--bg-panel);">
+            <div class="stage-index">1</div>
+            <h3 id="wf1-t">Configure Settings</h3>
+            <p id="wf1-d">Set your OpenAI/Codex endpoints, keys, and preferred models right from the web GUI.</p>
+          </div>
+          <div class="stage-card" style="background: var(--bg-panel);">
+            <div class="stage-index">2</div>
+            <h3 id="wf2-t">Create Definition</h3>
+            <p id="wf2-d">Input your research hypothesis, compute budget, API constraints, and artifact expectations.</p>
+          </div>
+          <div class="stage-card" style="background: var(--bg-panel);">
+            <div class="stage-index">3</div>
+            <h3 id="wf3-t">Literature Grounding</h3>
+            <p id="wf3-d">Import paper links, PDFs and perform live discovery. The engine parses them contextually.</p>
+          </div>
+          <div class="stage-card" style="background: var(--bg-panel);">
+            <div class="stage-index">4</div>
+            <h3 id="wf4-t">Approve Strategy</h3>
+            <p id="wf4-d">Review the system-generated strategy. Reject or approve to unblock the execution pipeline.</p>
+          </div>
+          <div class="stage-card" style="background: var(--bg-panel);">
+            <div class="stage-index">5</div>
+            <h3 id="wf5-t">Live Observation</h3>
+            <p id="wf5-d">Watch stages transition from pending to running, inspect internal metadata, or rollback on failure.</p>
+          </div>
+          <div class="stage-card" style="background: var(--bg-panel);">
+            <div class="stage-index">6</div>
+            <h3 id="wf6-t">Evaluate Results</h3>
+            <p id="wf6-d">Gather the evaluated experiment code and download the final LaTeX manuscript with peer-review rubrics.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 id="privacy-title" style="font-family: 'Instrument Serif', serif; font-size: 2.8rem; font-weight: 400; margin: 0 0 1.5rem 0;">Privacy & Local-First</h2>
+        <p id="privacy-desc" style="font-size: 1.15rem; color: var(--muted); line-height: 1.6; max-width: 800px; margin-bottom: 2rem;">
+          Your research context belongs to you. Auto Research Pro Max is built with local isolation natively in mind.
+        </p>
+        <div style="background: var(--surface-soft); padding: 2rem; border-radius: 20px; border: 1px solid var(--line);">
+          <ul class="contract-list check-list" style="color: var(--text); font-size: 1.1rem; line-height: 1.8; margin: 0; padding-left: 20px;">
+            <li id="priv-1"><strong>Local Storage:</strong> DB state, plans, running outputs, and artifacts are all stored in the local SQLite database.</li>
+            <li id="priv-2"><strong>Offline Fallback:</strong> If no API key is provided, the UI functions perfectly using deterministic fallback text.</li>
+            <li id="priv-3"><strong>Private PDFs:</strong> Uploaded papers are saved strictly to the local disk. No opaque third-party cloud hosting.</li>
+            <li id="priv-4"><strong>Data Control:</strong> All data egress is strictly confined to user-configured APIs and endpoint URIs you explicitly defined.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="panel brand-card" style="margin-top: 1rem;">
+        <h1 id="bot-title" style="text-align: center; font-size: 3rem; margin-bottom: 1rem;">Transform your research workflow.</h1>
+        <p id="bot-desc" style="text-align: center; color: var(--muted); max-width: 600px; margin: 0 auto 2rem; line-height: 1.6; font-size: 1.1rem;">
+          Everything you need to orchestrate autonomous research, complete with human-in-the-loop gates so the system does the work but you make the calls.
+        </p>
+        <div style="display: flex; justify-content: center;">
+          <a href="https://github.com/JacktheRanger/Auto-Research-Pro-Max" target="_blank" style="text-decoration: none;">
+            <button id="btn-start" style="padding: 1.2rem 2.4rem; font-size: 1.2rem; border-radius: 999px;">Get Started Locally</button>
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <footer id="footer-text" style="text-align: center; padding: 3rem 1rem; color: var(--muted); font-size: 1rem; line-height: 1.6; margin-top: 2rem;">
+      &copy; 2026 Auto Research Pro Max. Licensed under AGPL-3.0. <br>
+      A plan-gated research GUI built for modern workflows.
+    </footer>
+  </div>
+
+  <script>
+    const dict = {
+      "eyebrow": { en: "The Autonomous Workbench", cn: "自主研究工作台" },
+      "hero-h2": { en: "Plan-gated research GUI with retrieval, sandboxing, and approval loops. Start from an idea, ground it with papers, approve the plan, and control staged execution in one place.", cn: "带有计划门控、真实检索、沙箱执行与人工审批回路的研究平台 GUI。<br>从一个想法出发，基于论文建立认知上下文，完成计划审核后，在同一工作区内掌控整个执行链路。" },
+      "btn-github": { en: "View on GitHub", cn: "访问 GitHub" },
+      "btn-explore": { en: "Explore Features", cn: "了解产品特性" },
+      
+      "title-features": { en: "Comprehensive Research Pipeline", cn: "完整的研究工作流" },
+      "ft1-title": { en: "Mandatory Brief Intake", cn: "规范化的项目立项" },
+      "ft1-desc": { en: "Before execution, outline your title, idea, background, direction, goals, constraints, and must-read papers. No implicit black-box prompting.", cn: "在执行前强制收集完整的项目简报：明确思路、背景、预期目标、约束条件及核心必读文献。系统规划拒绝黑盒猜测。" },
+      "ft2-title": { en: "Hybrid Grounding Engine", cn: "融合文献处理能力" },
+      "ft2-desc": { en: "Upload local PDFs and remote paper URLs simultaneously. We enrich metadata (DOI, venue, authors) and automatically chunk/embed for retrieval.", cn: "在同一项目工作区内无缝管理本地 PDF 与远程论文链接。系统将自动提取元数据（DOI、出处和作者），并完成分块与向量化处理。" },
+      "ft3-title": { en: "Plan-Gated Execution", cn: "人工干预的计划门控" },
+      "ft3-desc": { en: "The system drafts an experiment and execution plan first. It must pass an explicit human approval gate before moving to sandbox run.", cn: "在调度代码与计算资源前，系统会先生成整体的研究与实验编排计划。该计划必须经过显式的人工审批与调整才能流转。" },
+      "ft4-title": { en: "Repository-Aware Sandboxing", cn: "代码仓库级沙箱" },
+      "ft4-desc": { en: "Attach a local repo path or Git URL alongside setup/run commands. The sandbox executes real-world workloads, tracks timeouts, and collects artifacts.", cn: "关联本地项目路径或外部 Git 仓库。配合运行指令，沙箱即可执行真实计算任务，自动记录超时情况并完整回收产物文件。" },
+      "ft5-title": { en: "Live Pipeline Tracking", cn: "多阶段进度实时追踪" },
+      "ft5-desc": { en: "Monitor the real-time progress of 15+ sub-stages via WebSocket updates, pause, resume, or rollback when an approval gate is reached.", cn: "流程作业拆解了超 15 个细粒度阶段。通过 WebSocket 实时监控状态；到达人工审批节点时，可进行暂停、恢复乃至节点回滚。" },
+      "ft6-title": { en: "Complete Deliverables", cn: "体系化的项目交付" },
+      "ft6-desc": { en: "Export true Markdown, LaTeX, BibTeX files, compiled PDF manuscripts, and a full zipped delivery bundle containing all research products.", cn: "不仅是单纯的文本，系统将在管线末端直接生成包含 Markdown、LaTeX 源文件、BibTeX 及编译后 PDF 的研究交付包供完整下载。" },
+
+      "flow-title": { en: "How It Works", cn: "运行机制" },
+      "wf1-t": { en: "Configure Settings", cn: "本地环境配置" },
+      "wf1-d": { en: "Set your OpenAI/Codex endpoints, keys, and preferred models right from the web GUI.", cn: "直接通过 Web 界面安全地配置兼容相关协议的模型 API 代理、端点及密钥。" },
+      "wf2-t": { en: "Create Definition", cn: "建立项目档案" },
+      "wf2-d": { en: "Input your research hypothesis, compute budget, API constraints, and artifact expectations.", cn: "录入研究想法与前沿方向约束，配置沙箱所需的算力预算与预期输出结果。" },
+      "wf3-t": { en: "Literature Grounding", cn: "引入学术语境" },
+      "wf3-d": { en: "Import paper links, PDFs and perform live discovery. The engine parses them contextually.", cn: "提供论文原文或相关 URL 以建立学术知识上下文，为后续的计算检索与实验生成提供扎实现实依据。" },
+      "wf4-t": { en: "Approve Strategy", cn: "审核执行策略" },
+      "wf4-d": { en: "Review the system-generated strategy. Reject or approve to unblock the execution pipeline.", cn: "人工审阅由系统生成的架构可行性分析与初步执行方案，通过卡点确认以解锁流水线自动化作业。" },
+      "wf5-t": { en: "Live Observation", cn: "监视任务状态" },
+      "wf5-d": { en: "Watch stages transition from pending to running, inspect internal metadata, or rollback on failure.", cn: "在界面上直观查看各个阶段的处理过程，获取详细调用阶段日志。遇到未预期执行错误可随时手动介入。" },
+      "wf6-t": { en: "Evaluate Results", cn: "收获验证源稿" },
+      "wf6-d": { en: "Gather the evaluated experiment code and download the final LaTeX manuscript with peer-review rubrics.", cn: "提取经过实验验证的可用运行代码，以及包含了经过初步同行评审模拟反馈与合规格式生成的终端 PDF 文献手稿。" },
+
+      "privacy-title": { en: "Privacy & Local-First", cn: "隐私及本地优先设计" },
+      "privacy-desc": { en: "Your research context belongs to you. Auto Research Pro Max is built with local isolation natively in mind.", cn: "我们深知学术研究创意极为敏感脆弱。因而底层架构在设计之初就已被设定为数据零上报的纯净本地原生环境。" },
+      "priv-1": { en: "<strong>Local Storage:</strong> DB state, plans, running outputs, and artifacts are all stored in the local SQLite database.", cn: "<strong>本地持久化：</strong> 全量的项目档案信息、推演中间态草稿与运行时输出日志，仅被持久化保存在执行者本地专属的 SQLite 内。" },
+      "priv-2": { en: "<strong>Offline Fallback:</strong> If no API key is provided, the UI functions perfectly using deterministic fallback text.", cn: "<strong>离线模拟支持：</strong> 在未提供任何大模型 API 配置的物理断网节点下，应用系统前端仍然可调用静态回退文本验证跑通基本流转机制。" },
+      "priv-3": { en: "<strong>Private PDFs:</strong> Uploaded papers are saved strictly to the local disk. No opaque third-party cloud hosting.", cn: "<strong>本地图文保障：</strong> 作为语料分析库的超大 PDF 源文件限制存放在 <code>backend/data/uploads</code> 主控目录夹中，无三方远程盗存风险。" },
+      "priv-4": { en: "<strong>Data Control:</strong> All data egress is strictly confined to user-configured APIs and endpoint URIs you explicitly defined.", cn: "<strong>透明网关流控：</strong> 一切对外请求的数据路由走向仅接受来自设置面板显式输入的推理服务端点，方便内外网或混合集群自定义接入控制。" },
+
+      "bot-title": { en: "Transform your research workflow.", cn: "变革传统研究工作流" },
+      "bot-desc": { en: "Everything you need to orchestrate autonomous research, complete with human-in-the-loop gates so the system does the work but you make the calls.", cn: "涵盖自动化研究编排所需的全套闭环基础设施。借助人机环路（Human-in-the-loop）的柔性门控模型，让机器冲锋扫雷，使自身坐镇战术指挥核心。" },
+      "btn-start": { en: "Get Started Locally", cn: "本地一键启动" },
+      "footer-text": { en: "&copy; 2026 Auto Research Pro Max. Licensed under AGPL-3.0. <br>A plan-gated research GUI built for modern workflows.", cn: "&copy; 2026 Auto Research Pro Max. 遵循 AGPL-3.0 开源协议。<br>专为高级研究团队与开发型学者打造的自主研究工作流 GUI 终端。" }
+    };
+
+    function setLang(lang) {
+      document.getElementById('lang-en').classList.toggle('active', lang === 'en');
+      document.getElementById('lang-cn').classList.toggle('active', lang === 'cn');
+      
+      Object.keys(dict).forEach(key => {
+        const el = document.getElementById(key);
+        if (el) {
+          el.innerHTML = dict[key][lang];
+        }
+      });
+
+      // Switch image source
+      const demoImg = document.getElementById('demo-image');
+      if (demoImg) {
+        demoImg.src = lang === 'en' ? 'page-long.png' : 'page-long-cn.png';
+      }
+
+      window.localStorage.setItem('arpm-lang-landing', lang);
+      document.documentElement.lang = lang === 'cn' ? 'zh-CN' : 'en';
+    }
+
+    const savedLang = window.localStorage.getItem('arpm-lang-landing') || 'en';
+    setLang(savedLang);
+  </script>
+</body>
+</html>
