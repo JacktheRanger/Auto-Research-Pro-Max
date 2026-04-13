@@ -18,7 +18,7 @@
 
 ## English
 
-Auto Research Pro Max is an autonomous workbench that takes you from initial idea to paper manuscript via integrated planning, literature grounding, and local sandbox verification. Instead of a black-box agent run, it provides a plan-gated workflow where retrieval, sandboxing, and approval loops are transparent and fully controlled.
+Auto Research Pro Max is an autonomous workbench that takes you from initial idea to a complete paper manuscript. Provide relevant information and literature, review AI-generated plans, and let the AI autonomously design and validate experiments in a local sandbox, generating a complete manuscript with just one click. Instead of a black-box agent run, it provides a plan-gated workflow where retrieval, sandboxing, and approval loops are transparent and fully controlled.
 
 ## Demo
 
@@ -187,7 +187,7 @@ Issues and focused pull requests are welcome. For larger workflow or architectur
 
 ## 中文
 
-Auto Research Pro Max 是一个自主研究工作台，旨在通过集成化的计划审批、文献建立认知上下文以及本地沙箱验证，将研究想法转化为完整的论文手稿。与黑盒 Agent 不同，它提供了一个规划导向的工作流，让检索、沙箱实验和人工审批回路变得清晰可见且全程可控。
+Auto Research Pro Max 从一个想法出发，给出相关的信息与文献，审阅 AI 给出的计划，AI 会通过自动本地沙箱环境自动化设计并验证研究方案，最终一键生成完整的论文手稿。与黑盒 Agent 不同，它提供了一个规划导向的工作流，让检索、沙箱实验和人工审批回路变得清晰可见且全程可控。
 
 ## 演示
 
