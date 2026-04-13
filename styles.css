@@ -122,15 +122,13 @@ body::after {
 /* Typography Enhancements */
 .hero-brand {
   font-family: "Instrument Serif", serif;
-  font-size: clamp(4rem, 8vw, 7rem);
   font-weight: 400;
   letter-spacing: -0.04em;
-  line-height: 0.95;
-  margin: 0;
   background: var(--text-gradient);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  padding-bottom: 0.2em; /* prevent clipping */
+  padding-bottom: 0.1em;
+  display: inline-block; /* Support gradient clipping better */
 }
 
 .eyebrow {
