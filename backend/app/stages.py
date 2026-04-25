@@ -29,6 +29,24 @@ class ApprovalGate:
 
 
 @dataclass(frozen=True)
+class RetryPolicy:
+    max_attempts: int = 2
+    base_delay_seconds: float = 2.0
+    backoff_factor: float = 2.0
+    retry_on_validation: bool = True
+    retry_on_exception: bool = True
+
+    def delay_for(self, attempt: int) -> float:
+        if attempt <= 1:
+            return 0.0
+        return float(self.base_delay_seconds) * (self.backoff_factor ** (attempt - 2))
+
+
+DEFAULT_RETRY_POLICY = RetryPolicy()
+SANDBOX_RETRY_POLICY = RetryPolicy(max_attempts=1, retry_on_validation=False, retry_on_exception=False)
+
+
+@dataclass(frozen=True)
 class StageDefinition:
     index: int
     key: str
@@ -39,6 +57,7 @@ class StageDefinition:
     contract: StageContract
     artifact_schema: tuple[ArtifactSchemaItem, ...]
     approval_gate: ApprovalGate | None = None
+    retry_policy: RetryPolicy = DEFAULT_RETRY_POLICY
 
 
 PIPELINE_STAGES: tuple[StageDefinition, ...] = (
@@ -335,6 +354,7 @@ PIPELINE_STAGES: tuple[StageDefinition, ...] = (
             summary="Review sandbox outputs before the workflow moves into manuscript preparation.",
             rollback_to_stage_key="experiment_design",
         ),
+        retry_policy=SANDBOX_RETRY_POLICY,
     ),
     StageDefinition(
         index=9,
@@ -617,6 +637,16 @@ def _contract_to_dict(contract: StageContract) -> dict[str, Any]:
     }
 
 
+def _retry_policy_to_dict(policy: RetryPolicy) -> dict[str, Any]:
+    return {
+        "max_attempts": int(policy.max_attempts),
+        "base_delay_seconds": float(policy.base_delay_seconds),
+        "backoff_factor": float(policy.backoff_factor),
+        "retry_on_validation": bool(policy.retry_on_validation),
+        "retry_on_exception": bool(policy.retry_on_exception),
+    }
+
+
 def stage_catalog() -> list[dict[str, Any]]:
     catalog: list[dict[str, Any]] = []
     for stage in PIPELINE_STAGES:
@@ -639,6 +669,7 @@ def stage_catalog() -> list[dict[str, Any]]:
                     if stage.approval_gate
                     else None
                 ),
+                "retry_policy": _retry_policy_to_dict(stage.retry_policy),
             }
         )
     return catalog

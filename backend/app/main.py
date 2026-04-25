@@ -41,7 +41,7 @@ from .services.papers import (
     update_paper_metadata,
 )
 from .services.retrieval import search_literature
-from .services.runner import pause_run, reject_run, resume_run, rollback_run, start_run
+from .services.runner import pause_run, reject_run, resume_run, retry_stage, rollback_run, start_run
 from .stages import STAGE_COUNT, stage_catalog
 
 
@@ -445,6 +445,20 @@ async def run_reject(run_id: str, payload: RunControlPayload | None = None) -> d
 async def run_rollback(run_id: str, payload: RunControlPayload | None = None) -> dict[str, Any]:
     args = (payload or RunControlPayload()).model_dump()
     return _controlled_run_response(run_id, rollback_run(run_id, **args))
+
+
+@app.post("/api/runs/{run_id}/stages/{stage_index}/retry")
+async def run_retry_stage(run_id: str, stage_index: int) -> dict[str, Any]:
+    run = get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    try:
+        updated = retry_stage(run_id, stage_index, get_settings())
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return _controlled_run_response(run_id, updated)
 
 
 @app.websocket("/ws/runs/{run_id}")

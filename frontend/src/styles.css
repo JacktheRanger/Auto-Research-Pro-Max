@@ -740,6 +740,54 @@ textarea {
   gap: 0.5rem;
 }
 
+.stage-attempts {
+  margin-top: 0.55rem;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.stage-attempts ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.stage-attempts li {
+  font-size: 0.84rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: baseline;
+}
+
+.stage-attempt-pill {
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  background: var(--secondary-bg);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stage-attempt-succeeded {
+  background: rgba(30, 143, 122, 0.18);
+  color: var(--mint);
+}
+
+.stage-attempt-validation_failed,
+.stage-attempt-errored {
+  background: rgba(214, 95, 86, 0.18);
+  color: var(--danger);
+}
+
+.stage-attempt-running,
+.stage-attempt-manual_retry {
+  background: rgba(199, 155, 43, 0.18);
+  color: var(--warning);
+}
+
 .json-surface {
   background: rgba(7, 21, 26, 0.06);
   border: 1px solid var(--line);

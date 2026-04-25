@@ -13,7 +13,6 @@
 ## Workflow
 
 - Add optional branching to compare multiple hypotheses.
-- Add stage retry policies.
 - Add per-stage cost tracking and usage analytics.
 - Add project templates for different research modes: survey, benchmark, implementation, ablation-heavy paper.
 - Allow the user to customize the current stage count and stage list per project.

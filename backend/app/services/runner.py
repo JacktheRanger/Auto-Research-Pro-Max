@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 from typing import Any, Literal
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 from ..db import (
     append_run_audit_event,
@@ -325,53 +330,143 @@ async def execute_run(run_id: str, settings: dict[str, Any]) -> None:
                 update_run(run_id, current_stage_index=stage.index)
                 continue
 
-            update_stage(
-                run_id,
-                stage.index,
-                status="running",
-                notes=f"{stage.label} is in progress.",
-                error="",
-                started=True,
-            )
-            update_run(run_id, status="running", current_stage_index=max(stage.index - 1, 0), error="")
-            append_run_event(run_id, {"action": "stage_start", "stage_index": stage.index, "stage_key": stage.key})
-            await _emit(run_id)
-
-            prior_outputs = _prior_outputs(run_id, stage.index)
-            payload = await asyncio.to_thread(
-                _execute_stage_payload,
-                run_id,
-                stage,
-                project,
-                plan["plan_markdown"],
-                papers,
-                prior_outputs,
-                settings,
-            )
-            validation = validate_stage_payload(stage, payload)
             stage_metadata = dict(stage_record.get("metadata_json") or {})
-            stage_metadata["validation"] = validation
-            if not validation["ok"]:
+            attempts = list(stage_metadata.get("attempts") or [])
+            policy = stage.retry_policy
+            stage_metadata["retry_policy"] = {
+                "max_attempts": policy.max_attempts,
+                "base_delay_seconds": policy.base_delay_seconds,
+                "backoff_factor": policy.backoff_factor,
+                "retry_on_validation": policy.retry_on_validation,
+                "retry_on_exception": policy.retry_on_exception,
+            }
+
+            payload: dict[str, Any] | None = None
+            validation: dict[str, Any] | None = None
+            failure_reason = ""
+            attempt_succeeded = False
+
+            for attempt in range(1, max(policy.max_attempts, 1) + 1):
+                if attempt > 1:
+                    delay = policy.delay_for(attempt)
+                    if delay:
+                        await asyncio.sleep(delay)
+                attempt_record: dict[str, Any] = {
+                    "attempt": attempt,
+                    "started_at": _now_iso(),
+                    "status": "running",
+                }
+                attempts.append(attempt_record)
+                stage_metadata["attempts"] = attempts
+                update_stage(
+                    run_id,
+                    stage.index,
+                    status="running",
+                    notes=(
+                        f"{stage.label} is in progress (attempt {attempt}/{policy.max_attempts})."
+                        if policy.max_attempts > 1
+                        else f"{stage.label} is in progress."
+                    ),
+                    error="",
+                    metadata_json=stage_metadata,
+                    started=True,
+                )
+                update_run(run_id, status="running", current_stage_index=max(stage.index - 1, 0), error="")
+                append_run_event(
+                    run_id,
+                    {
+                        "action": "stage_start",
+                        "stage_index": stage.index,
+                        "stage_key": stage.key,
+                        "attempt": attempt,
+                        "max_attempts": policy.max_attempts,
+                    },
+                )
+                await _emit(run_id)
+
+                prior_outputs = _prior_outputs(run_id, stage.index)
+                try:
+                    payload = await asyncio.to_thread(
+                        _execute_stage_payload,
+                        run_id,
+                        stage,
+                        project,
+                        plan["plan_markdown"],
+                        papers,
+                        prior_outputs,
+                        settings,
+                    )
+                except Exception as exc:
+                    attempt_record["status"] = "errored"
+                    attempt_record["error"] = str(exc)
+                    attempt_record["completed_at"] = _now_iso()
+                    failure_reason = f"{stage.label} raised: {exc}"
+                    if policy.retry_on_exception and attempt < policy.max_attempts:
+                        append_run_event(
+                            run_id,
+                            {
+                                "action": "stage_retry",
+                                "stage_index": stage.index,
+                                "stage_key": stage.key,
+                                "attempt": attempt,
+                                "reason": "exception",
+                                "error": str(exc),
+                            },
+                        )
+                        continue
+                    raise
+
+                validation = validate_stage_payload(stage, payload)
+                stage_metadata["validation"] = validation
+                if validation["ok"]:
+                    attempt_record["status"] = "succeeded"
+                    attempt_record["completed_at"] = _now_iso()
+                    attempt_succeeded = True
+                    break
+
                 error_message = "Stage validation failed: " + "; ".join(validation["errors"])
+                attempt_record["status"] = "validation_failed"
+                attempt_record["error"] = error_message
+                attempt_record["completed_at"] = _now_iso()
+                failure_reason = error_message
+                if policy.retry_on_validation and attempt < policy.max_attempts:
+                    append_run_event(
+                        run_id,
+                        {
+                            "action": "stage_retry",
+                            "stage_index": stage.index,
+                            "stage_key": stage.key,
+                            "attempt": attempt,
+                            "reason": "validation",
+                            "errors": validation["errors"],
+                        },
+                    )
+                    continue
+                break
+
+            stage_metadata["attempts"] = attempts
+
+            if not attempt_succeeded:
                 update_stage(
                     run_id,
                     stage.index,
                     status="failed",
-                    notes=payload.get("notes") or error_message,
-                    content_md=payload.get("content_md") or "",
-                    artifact_json=payload.get("artifacts") or {},
+                    notes=(payload or {}).get("notes") or failure_reason or "Stage failed.",
+                    content_md=(payload or {}).get("content_md") or "",
+                    artifact_json=(payload or {}).get("artifacts") or {},
                     metadata_json=stage_metadata,
-                    error=error_message,
+                    error=failure_reason or "Stage failed",
                 )
-                update_run_status(run_id, "failed", stage.index, error_message)
+                update_run_status(run_id, "failed", stage.index, failure_reason or "Stage failed")
                 set_project_run_complete(run["project_id"], "failed")
                 append_run_event(
                     run_id,
                     {
-                        "action": "stage_validation_failed",
+                        "action": "stage_validation_failed" if validation and not validation["ok"] else "stage_failed",
                         "stage_index": stage.index,
                         "stage_key": stage.key,
-                        "errors": validation["errors"],
+                        "errors": (validation or {}).get("errors") or [failure_reason],
+                        "attempts": len(attempts),
                     },
                 )
                 await _emit(run_id)
@@ -381,9 +476,9 @@ async def execute_run(run_id: str, settings: dict[str, Any]) -> None:
                 run_id,
                 stage.index,
                 status="completed",
-                notes=payload["notes"],
-                content_md=payload["content_md"],
-                artifact_json=payload.get("artifacts") or {},
+                notes=(payload or {}).get("notes", ""),
+                content_md=(payload or {}).get("content_md", ""),
+                artifact_json=(payload or {}).get("artifacts") or {},
                 metadata_json=stage_metadata,
                 completed=True,
                 gate_status="pending" if stage.approval_gate else "",
@@ -458,6 +553,58 @@ def start_run(project_id: str, settings: dict[str, Any]) -> dict[str, Any]:
     created = create_run(project_id)
     RUN_TASKS[created["id"]] = asyncio.create_task(execute_run(created["id"], settings))
     return created
+
+
+def retry_stage(run_id: str, stage_index: int, settings: dict[str, Any]) -> dict[str, Any] | None:
+    run = get_run(run_id)
+    if run is None:
+        return None
+    stage_record = get_run_stage(run_id, stage_index)
+    if stage_record is None:
+        raise LookupError(f"Run {run_id} has no stage {stage_index}")
+
+    metadata = dict(stage_record.get("metadata_json") or {})
+    attempts = list(metadata.get("attempts") or [])
+    attempts.append(
+        {
+            "attempt": len(attempts) + 1,
+            "status": "manual_retry",
+            "queued_at": _now_iso(),
+        }
+    )
+    metadata["attempts"] = attempts
+    metadata["manual_retry_count"] = int(metadata.get("manual_retry_count") or 0) + 1
+
+    update_stage(
+        run_id,
+        stage_index,
+        status="pending",
+        notes=f"Manual retry queued for stage {stage_index}.",
+        content_md="",
+        artifact_json={},
+        gate_status="",
+        error="",
+        metadata_json=metadata,
+        reset_timestamps=True,
+    )
+    update_run(
+        run_id,
+        status="running",
+        current_stage_index=max(stage_index - 1, 0),
+        pending_gate_index=0,
+        pending_gate_key="",
+        pending_gate_state="",
+        error="",
+        finished=False,
+    )
+    update_project_status(run["project_id"], "running")
+    append_run_event(run_id, {"action": "manual_retry", "stage_index": stage_index})
+
+    if run_id not in RUN_TASKS or RUN_TASKS[run_id].done():
+        RUN_TASKS[run_id] = asyncio.create_task(execute_run(run_id, settings))
+    else:
+        _wake_run(run_id)
+    return get_run(run_id)
 
 
 def _stage_context_for_gate(run_id: str, run: dict[str, Any]) -> tuple[int, str, str]:

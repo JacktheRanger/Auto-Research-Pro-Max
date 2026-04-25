@@ -317,6 +317,10 @@ const uiCopy = {
     paperOcrSkipped: "OCR could not recover text — see metadata for missing dependencies.",
     paperOcrUnavailable: "OCR is unavailable: install the optional pytesseract + tesseract dependencies.",
     paperOcrSummary: "OCR",
+    retryStage: "Retry stage",
+    retryStageDisabled: "Stage cannot be retried while the run is busy.",
+    retryQueued: "Stage retry queued.",
+    retryAttempts: "Attempts",
   },
   cn: {
     ready: "已就绪。",
@@ -523,6 +527,10 @@ const uiCopy = {
     paperOcrSkipped: "OCR 未能恢复文本 — 详情见 metadata 中的依赖。",
     paperOcrUnavailable: "OCR 不可用：请安装可选的 pytesseract 与 tesseract 依赖。",
     paperOcrSummary: "OCR 状态",
+    retryStage: "重新执行该阶段",
+    retryStageDisabled: "运行繁忙时无法重试。",
+    retryQueued: "阶段重试已排队。",
+    retryAttempts: "尝试次数",
   },
 } satisfies Record<
   LocaleMode,
@@ -695,6 +703,56 @@ type PaperCardCopy = {
   paperRunOcr: string;
   paperOcrSummary: string;
 };
+
+type StageAttemptCopy = {
+  retryAttempts: string;
+};
+
+function StageAttemptList({
+  stage,
+  text,
+}: {
+  stage: RunStage | undefined;
+  text: StageAttemptCopy;
+}) {
+  if (!stage) {
+    return null;
+  }
+  const meta = stage.metadata_json as
+    | {
+        attempts?: Array<{
+          attempt: number;
+          status?: string;
+          error?: string;
+          completed_at?: string;
+          started_at?: string;
+        }>;
+        retry_policy?: { max_attempts?: number };
+      }
+    | undefined;
+  const attempts = meta?.attempts ?? [];
+  if (!attempts.length) {
+    return null;
+  }
+  const max = meta?.retry_policy?.max_attempts ?? attempts.length;
+  return (
+    <div className="stage-attempts">
+      <strong>
+        {text.retryAttempts}: {attempts.length}/{max}
+      </strong>
+      <ul>
+        {attempts.map((attempt, index) => (
+          <li key={`${stage.run_id}-${stage.stage_index}-${attempt.attempt}-${index}`}>
+            <span className={`stage-attempt-pill stage-attempt-${attempt.status ?? "pending"}`}>
+              #{attempt.attempt} · {attempt.status ?? "pending"}
+            </span>
+            {attempt.error ? <span className="muted"> · {attempt.error}</span> : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 function PaperCard({
   paper,
@@ -1693,6 +1751,22 @@ export default function App() {
     await refreshProjects();
   }
 
+  async function handleRetryStage(stageIndex: number) {
+    if (!run) {
+      return;
+    }
+    try {
+      const result = await api.retryStage(run.id, stageIndex);
+      setRun(result.run);
+      setRunStages(result.stages);
+      setAuditEvents(result.audit_events ?? []);
+      setStatusMessage(text.retryQueued);
+      await refreshProjects();
+    } catch (error) {
+      setStatusMessage(`${text.retryStageDisabled} ${(error as Error).message ?? ""}`);
+    }
+  }
+
   async function handleRollbackRun() {
     if (!run) {
       return;
@@ -2334,6 +2408,17 @@ export default function App() {
             <section className="panel">
               <div className="panel-header">
                 <h2>{text.selectedStageOutput}</h2>
+                <div className="inline-actions">
+                  {selectedStage && selectedStage.status === "failed" ? (
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => void handleRetryStage(selectedStage.stage_index)}
+                    >
+                      {text.retryStage}
+                    </button>
+                  ) : null}
+                </div>
               </div>
               <div className="markdown-surface">
                 <ReactMarkdown>{selectedStage?.content_md ?? text.selectedStagePlaceholder}</ReactMarkdown>
@@ -2342,6 +2427,7 @@ export default function App() {
                 <div className="detail-block">
                   <h3>{text.stageNotes}</h3>
                   <p>{selectedStage?.notes || text.selectedStagePlaceholder}</p>
+                  <StageAttemptList stage={selectedStage} text={text} />
                 </div>
                 <div className="detail-block">
                   <h3>{text.stageContract}</h3>

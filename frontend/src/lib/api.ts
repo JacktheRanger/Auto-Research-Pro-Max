@@ -135,6 +135,14 @@ export type ApprovalGate = {
   rollback_to_stage_key: string;
 };
 
+export type StageRetryPolicy = {
+  max_attempts: number;
+  base_delay_seconds: number;
+  backoff_factor: number;
+  retry_on_validation: boolean;
+  retry_on_exception: boolean;
+};
+
 export type StageCatalogItem = {
   index: number;
   key: string;
@@ -145,6 +153,7 @@ export type StageCatalogItem = {
   contract: StageContract;
   artifact_schema: ArtifactSchemaItem[];
   approval_gate: ApprovalGate | null;
+  retry_policy?: StageRetryPolicy;
 };
 
 export type RunStage = {
@@ -421,6 +430,13 @@ export const api = {
       {
         method: "POST",
         body: JSON.stringify(payload),
+      },
+    ),
+  retryStage: (runId: string, stageIndex: number) =>
+    request<{ run: Run; stages: RunStage[]; audit_events: RunAuditEvent[] }>(
+      `/api/runs/${runId}/stages/${stageIndex}/retry`,
+      {
+        method: "POST",
       },
     ),
 };
