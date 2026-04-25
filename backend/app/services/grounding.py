@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import math
 import re
 import uuid
@@ -8,7 +9,14 @@ from typing import Any
 
 from openai import OpenAI
 
-from ..db import list_paper_chunks, list_project_paper_chunks, replace_paper_chunks, update_chunk_embeddings
+from ..db import (
+    get_paper,
+    list_paper_chunks,
+    list_papers,
+    list_project_paper_chunks,
+    replace_paper_chunks,
+    update_chunk_embeddings,
+)
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
 
@@ -91,17 +99,92 @@ def build_index_text(paper: dict[str, Any]) -> str:
     return "\n\n".join(part for part in parts if part)
 
 
-def index_paper(paper: dict[str, Any], settings: dict[str, Any]) -> dict[str, Any]:
+def _content_fingerprint(content: str, embedding_model: str) -> str:
+    payload = f"{embedding_model or ''}::{content}".encode("utf-8", errors="ignore")
+    return hashlib.sha1(payload).hexdigest()[:16]
+
+
+def _existing_fingerprint(paper_id: str) -> str:
+    chunks = list_paper_chunks(paper_id)
+    if not chunks:
+        return ""
+    metadata = chunks[0].get("metadata_json") or {}
+    return str(metadata.get("source_fingerprint") or "")
+
+
+def index_paper(
+    paper: dict[str, Any],
+    settings: dict[str, Any],
+    *,
+    force: bool = False,
+) -> dict[str, Any]:
     content = build_index_text(paper)
-    chunks = _chunk_text(content)
-    if chunks:
+    embedding_model = (settings.get("embedding_model") or "").strip()
+    new_fingerprint = _content_fingerprint(content, embedding_model)
+    previous_fingerprint = _existing_fingerprint(paper["id"])
+    skipped = False
+    if not force and new_fingerprint and previous_fingerprint == new_fingerprint:
+        skipped = True
+    chunks = _chunk_text(content) if not skipped else []
+    if not skipped and chunks:
         embeddings = _embed_texts([chunk["content"] for chunk in chunks], settings)
         if embeddings:
             for chunk, embedding in zip(chunks, embeddings):
                 chunk["embedding_json"] = embedding
-                chunk["metadata_json"]["embedding_model"] = settings.get("embedding_model") or ""
-    replace_paper_chunks(paper["id"], paper["project_id"], chunks)
-    return {"chunk_count": len(chunks), "embedding_ready": bool(chunks and chunks[0].get("embedding_json"))}
+                chunk["metadata_json"]["embedding_model"] = embedding_model
+                chunk["metadata_json"]["source_fingerprint"] = new_fingerprint
+        else:
+            for chunk in chunks:
+                chunk["metadata_json"]["source_fingerprint"] = new_fingerprint
+    if not skipped:
+        replace_paper_chunks(paper["id"], paper["project_id"], chunks)
+        embedding_ready = bool(chunks and chunks[0].get("embedding_json"))
+        chunk_count = len(chunks)
+    else:
+        existing_chunks = list_paper_chunks(paper["id"])
+        chunk_count = len(existing_chunks)
+        embedding_ready = bool(existing_chunks and (existing_chunks[0].get("embedding_json") or []))
+    return {
+        "chunk_count": chunk_count,
+        "embedding_ready": embedding_ready,
+        "fingerprint": new_fingerprint,
+        "skipped_unchanged": skipped,
+    }
+
+
+def reindex_project_papers(
+    project_id: str,
+    settings: dict[str, Any],
+    *,
+    force: bool = False,
+) -> dict[str, Any]:
+    papers = list_papers(project_id)
+    indexed = 0
+    skipped = 0
+    embedding_ready = 0
+    failures: list[dict[str, str]] = []
+    for paper in papers:
+        try:
+            report = index_paper(paper, settings, force=force)
+        except Exception as exc:  # noqa: BLE001 — propagate per-paper errors as data
+            failures.append({"paper_id": paper["id"], "title": paper.get("title") or "", "error": str(exc)})
+            continue
+        if report.get("skipped_unchanged"):
+            skipped += 1
+        else:
+            indexed += 1
+        if report.get("embedding_ready"):
+            embedding_ready += 1
+    ensure_project_embeddings(project_id, settings)
+    return {
+        "project_id": project_id,
+        "papers_total": len(papers),
+        "papers_indexed": indexed,
+        "papers_skipped": skipped,
+        "embedding_ready": embedding_ready,
+        "failures": failures,
+        "force": force,
+    }
 
 
 def _cosine_similarity(left: list[float], right: list[float]) -> float:

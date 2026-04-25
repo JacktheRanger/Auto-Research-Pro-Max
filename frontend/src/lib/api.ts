@@ -443,6 +443,19 @@ export const api = {
     }),
   getCitationGraph: (projectId: string) =>
     request<CitationGraph>(`/api/projects/${projectId}/citation-graph`),
+  reindexProject: (projectId: string, force = false) =>
+    request<{
+      project_id: string;
+      papers_total: number;
+      papers_indexed: number;
+      papers_skipped: number;
+      embedding_ready: number;
+      failures: Array<{ paper_id: string; title: string; error: string }>;
+      force: boolean;
+    }>(`/api/projects/${projectId}/reindex`, {
+      method: "POST",
+      body: JSON.stringify({ force }),
+    }),
   searchLiterature: (projectId: string, payload: { query: string; limit_per_provider?: number }) =>
     request<LiteratureSearchResponse>(`/api/projects/${projectId}/literature/search`, {
       method: "POST",
