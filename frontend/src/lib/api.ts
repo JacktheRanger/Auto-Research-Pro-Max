@@ -11,6 +11,7 @@ export type Project = {
   id: string;
   title: string;
   idea: string;
+  disabled_stage_keys?: string[];
   background: string;
   direction: string;
   goals: string;
@@ -443,6 +444,11 @@ export const api = {
     }),
   getCitationGraph: (projectId: string) =>
     request<CitationGraph>(`/api/projects/${projectId}/citation-graph`),
+  updateProjectStageConfig: (projectId: string, disabledStageKeys: string[]) =>
+    request<{ project: Project }>(`/api/projects/${projectId}/stage-config`, {
+      method: "PUT",
+      body: JSON.stringify({ disabled_stage_keys: disabledStageKeys }),
+    }),
   reindexProject: (projectId: string, force = false) =>
     request<{
       project_id: string;

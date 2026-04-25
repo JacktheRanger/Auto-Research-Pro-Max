@@ -31,6 +31,7 @@ _JSON_DEFAULTS: dict[str, Any] = {
     "audit_metadata_json": {},
     "sandbox_extra_packages": [],
     "sandbox_apt_packages": [],
+    "disabled_stage_keys": [],
 }
 
 
@@ -278,6 +279,7 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         ("sandbox_pip_index_url", "TEXT NOT NULL DEFAULT ''"),
         ("sandbox_max_attempts", "INTEGER NOT NULL DEFAULT 0"),
         ("sandbox_apt_packages", "TEXT NOT NULL DEFAULT '[]'"),
+        ("disabled_stage_keys", "TEXT NOT NULL DEFAULT '[]'"),
     ):
         _ensure_column(conn, "projects", name, definition)
 
@@ -939,6 +941,12 @@ def create_run(project_id: str) -> dict[str, Any]:
     run_id = f"run_{uuid.uuid4().hex[:12]}"
     now = utc_now()
     catalog = _catalog_for_run()
+    project = get_project(project_id) or {}
+    disabled = {key for key in (project.get("disabled_stage_keys") or []) if isinstance(key, str)}
+    enabled_stages = [stage for stage in PIPELINE_STAGES if stage.key not in disabled]
+    if not enabled_stages:
+        enabled_stages = list(PIPELINE_STAGES)
+    catalog_by_key = {item["key"]: item for item in catalog}
     with _LOCK, _connect() as conn:
         conn.execute(
             """
@@ -952,16 +960,21 @@ def create_run(project_id: str) -> dict[str, Any]:
                 project_id,
                 "queued",
                 0,
-                len(catalog),
+                len(enabled_stages),
                 0,
                 "",
                 "",
                 now,
                 now,
-                _json_dump({"events": []}),
+                _json_dump({
+                    "events": [],
+                    "disabled_stage_keys": sorted(disabled),
+                    "enabled_stage_keys": [stage.key for stage in enabled_stages],
+                }),
             ),
         )
-        for stage in PIPELINE_STAGES:
+        for stage in enabled_stages:
+            stage_payload = catalog_by_key.get(stage.key) or {}
             conn.execute(
                 """
                 INSERT INTO run_stages (
@@ -975,8 +988,8 @@ def create_run(project_id: str) -> dict[str, Any]:
                     stage.key,
                     stage.label,
                     "pending",
-                    _json_dump(_catalog_for_run()[stage.index - 1]["contract"]),
-                    _json_dump(_catalog_for_run()[stage.index - 1]["artifact_schema"]),
+                    _json_dump(stage_payload.get("contract") or {}),
+                    _json_dump(stage_payload.get("artifact_schema") or []),
                     1 if stage.approval_gate else 0,
                     stage.approval_gate.label if stage.approval_gate else "",
                     rollback_target_index(stage) or 0,
@@ -986,9 +999,20 @@ def create_run(project_id: str) -> dict[str, Any]:
         conn.execute(
             "UPDATE projects SET status = ?, updated_at = ? WHERE id = ?",
             ("running", now, project_id),
-            )
+        )
         conn.commit()
     return get_run(run_id)
+
+
+def update_project_disabled_stages(project_id: str, disabled_stage_keys: list[str]) -> dict[str, Any] | None:
+    cleaned = [key for key in disabled_stage_keys if isinstance(key, str) and key.strip()]
+    with _LOCK, _connect() as conn:
+        conn.execute(
+            "UPDATE projects SET disabled_stage_keys = ?, updated_at = ? WHERE id = ?",
+            (_json_dump(cleaned), utc_now(), project_id),
+        )
+        conn.commit()
+    return get_project(project_id)
 
 
 def get_latest_run(project_id: str) -> dict[str, Any] | None:
