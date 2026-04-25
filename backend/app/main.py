@@ -84,6 +84,12 @@ class ProjectExecutionPayload(BaseModel):
     sandbox_setup_command: str = ""
     sandbox_run_command: str = ""
     expected_artifacts: list[str] = Field(default_factory=list)
+    sandbox_base_image: str = ""
+    sandbox_extra_packages: list[str] = Field(default_factory=list)
+    sandbox_apt_packages: list[str] = Field(default_factory=list)
+    sandbox_pip_index_url: str = ""
+    sandbox_timeout_seconds: int = 0
+    sandbox_max_attempts: int = 0
 
 
 class RemotePaperPayload(BaseModel):

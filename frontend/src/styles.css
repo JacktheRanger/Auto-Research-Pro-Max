@@ -1065,6 +1065,32 @@ textarea {
   color: var(--mint);
 }
 
+.sandbox-advanced {
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+  padding: 0.55rem 0.7rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.sandbox-advanced summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.sandbox-advanced label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.sandbox-advanced .split-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
 .json-surface {
   background: rgba(7, 21, 26, 0.06);
   border: 1px solid var(--line);
