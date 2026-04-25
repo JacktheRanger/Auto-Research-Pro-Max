@@ -355,6 +355,20 @@ export type RunDiff = {
   stage_diffs: StageDiff[];
 };
 
+export type OverviewStats = {
+  projects_total: number;
+  projects_active: number;
+  projects_archived: number;
+  papers_total: number;
+  chunks_total: number;
+  runs_total: number;
+  runs_by_status: Record<string, number>;
+  plans_ready: number;
+  total_tokens: number;
+  total_cost_usd: number;
+  latest_activity: string;
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     headers: {
@@ -438,6 +452,24 @@ export const api = {
       `/api/projects/${projectId}`,
       { method: "DELETE" },
     ),
+  resetProject: (projectId: string, dropPapers: boolean) =>
+    request<{ project: Project; drop_papers: boolean }>(
+      `/api/projects/${projectId}/reset`,
+      {
+        method: "POST",
+        body: JSON.stringify({ drop_papers: dropPapers }),
+      },
+    ),
+  wipeAll: () =>
+    request<{ removed: { projects: number; papers: number; runs: number; plans: number } }>(
+      `/api/admin/wipe`,
+      {
+        method: "POST",
+        body: JSON.stringify({ confirm: "WIPE" }),
+      },
+    ),
+  overview: () =>
+    request<OverviewStats>(`/api/overview`),
   getProject: (projectId: string) =>
     request<{
       project: Project;

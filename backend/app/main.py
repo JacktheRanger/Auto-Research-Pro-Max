@@ -30,10 +30,13 @@ from .db import (
     save_plan,
     save_settings,
     create_project,
+    get_overview_stats,
     get_settings,
+    reset_project_data,
     set_project_archived,
     update_project_disabled_stages,
     update_project_execution_config,
+    wipe_all_data,
 )
 from .services.citation_graph import build_citation_graph
 from .services.diffing import diff_runs
@@ -257,6 +260,14 @@ class ProjectDuplicatePayload(BaseModel):
     title: str = ""
 
 
+class ProjectResetPayload(BaseModel):
+    drop_papers: bool = False
+
+
+class AdminWipePayload(BaseModel):
+    confirm: str = ""
+
+
 class StageConfigPayload(BaseModel):
     disabled_stage_keys: list[str] = Field(default_factory=list)
 
@@ -335,6 +346,32 @@ async def projects_delete(project_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="Project not found")
     deleted = delete_project(project_id)
     return {"deleted": deleted, "projects": list_projects()}
+
+
+@app.post("/api/projects/{project_id}/reset")
+async def projects_reset(
+    project_id: str, payload: ProjectResetPayload | None = None
+) -> dict[str, Any]:
+    project = get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    drop_papers = bool(payload and payload.drop_papers)
+    reset_project_data(project_id, drop_papers=drop_papers)
+    refreshed = get_project(project_id)
+    return {"project": refreshed, "drop_papers": drop_papers}
+
+
+@app.post("/api/admin/wipe")
+async def admin_wipe(payload: AdminWipePayload) -> dict[str, Any]:
+    if payload.confirm != "WIPE":
+        raise HTTPException(status_code=400, detail="confirm must equal 'WIPE'")
+    counts = wipe_all_data()
+    return {"removed": counts}
+
+
+@app.get("/api/overview")
+async def overview() -> dict[str, Any]:
+    return get_overview_stats()
 
 
 @app.post("/api/projects/{project_id}/papers/upload")
