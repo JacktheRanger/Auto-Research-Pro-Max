@@ -119,8 +119,8 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             id INTEGER PRIMARY KEY CHECK (id = 1),
             api_key TEXT NOT NULL DEFAULT '',
             base_url TEXT NOT NULL DEFAULT 'https://api.openai.com/v1',
-            research_model TEXT NOT NULL DEFAULT 'gpt-5.4',
-            code_model TEXT NOT NULL DEFAULT 'gpt-5.4',
+            research_model TEXT NOT NULL DEFAULT 'gpt-5.5',
+            code_model TEXT NOT NULL DEFAULT 'gpt-5.5',
             embedding_model TEXT NOT NULL DEFAULT '',
             notes TEXT NOT NULL DEFAULT '',
             updated_at TEXT NOT NULL
@@ -337,7 +337,7 @@ def _seed_settings(conn: sqlite3.Connection) -> None:
             """
             INSERT INTO settings (
                 id, api_key, base_url, research_model, code_model, embedding_model, notes, updated_at
-            ) VALUES (1, '', 'https://api.openai.com/v1', 'gpt-5.4', 'gpt-5.4', '', '', ?)
+            ) VALUES (1, '', 'https://api.openai.com/v1', 'gpt-5.5', 'gpt-5.5', '', '', ?)
             """,
             (utc_now(),),
         )
@@ -348,12 +348,13 @@ def _seed_settings(conn: sqlite3.Connection) -> None:
         return
     updates: list[str] = []
     params: list[Any] = []
-    if current["research_model"] == "gpt-4.1-mini":
+    legacy_models = {"gpt-4.1-mini", "gpt-5.4"}
+    if current["research_model"] in legacy_models:
         updates.append("research_model = ?")
-        params.append("gpt-5.4")
-    if current["code_model"] == "gpt-4.1-mini":
+        params.append("gpt-5.5")
+    if current["code_model"] in legacy_models:
         updates.append("code_model = ?")
-        params.append("gpt-5.4")
+        params.append("gpt-5.5")
     if updates:
         updates.append("updated_at = ?")
         params.append(utc_now())

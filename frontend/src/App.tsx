@@ -215,9 +215,11 @@ const uiCopy = {
     selectedStagePlaceholder:
       "Run the pipeline to populate stage output. Click any stage card to inspect its content.",
     sourceGroundingSnapshot: "Source Snapshot",
+    sourceSnapshotResults: "Search results",
+    sourceSnapshotPapers: "Papers in project",
     noExtractedText: "No extracted text yet.",
-    white: "White",
-    black: "Black",
+    white: "Light",
+    black: "Dark",
     en: "EN",
     cn: "CN",
     settingsSaved: "Settings saved.",
@@ -522,9 +524,11 @@ const uiCopy = {
     selectedStageOutput: "当前阶段输出",
     selectedStagePlaceholder: "运行后这里会出现阶段输出。点击任意阶段卡片即可查看内容。",
     sourceGroundingSnapshot: "来源快照",
+    sourceSnapshotResults: "检索结果",
+    sourceSnapshotPapers: "项目论文",
     noExtractedText: "还没有提取文本。",
-    white: "白色",
-    black: "黑色",
+    white: "亮",
+    black: "暗",
     en: "EN",
     cn: "CN",
     settingsSaved: "设置已保存。",
@@ -741,8 +745,8 @@ const uiCopy = {
 const emptySettings: Settings = {
   api_key: "",
   base_url: "https://api.openai.com/v1",
-  research_model: "gpt-5.4",
-  code_model: "gpt-5.4",
+  research_model: "gpt-5.5",
+  code_model: "gpt-5.5",
   embedding_model: "",
   notes: "",
 };
@@ -1240,7 +1244,7 @@ function CitationGraphPanel({
   const summary = graph?.summary;
   const papers = graph?.nodes.filter((node) => node.kind === "paper") ?? [];
   const edgesByPaper = (() => {
-    const map = new Map<string, { outgoing: typeof graph.edges; incoming: typeof graph.edges }>();
+    const map = new Map<string, { outgoing: CitationGraph["edges"]; incoming: CitationGraph["edges"] }>();
     for (const node of papers) {
       map.set(node.id, { outgoing: [], incoming: [] });
     }
@@ -3075,7 +3079,7 @@ export default function App() {
               <input
                 value={settings.research_model}
                 onChange={(event) => setSettings({ ...settings, research_model: event.target.value })}
-                placeholder="gpt-5.4"
+                placeholder="gpt-5.5"
               />
             </label>
             <label>
@@ -3083,7 +3087,7 @@ export default function App() {
               <input
                 value={settings.code_model}
                 onChange={(event) => setSettings({ ...settings, code_model: event.target.value })}
-                placeholder="gpt-5.4"
+                placeholder="gpt-5.5"
               />
             </label>
             <label>
@@ -3185,7 +3189,7 @@ export default function App() {
           <section className="grid two-up">
             <form className="panel" onSubmit={handleCreateProject}>
               <div className="panel-header">
-                <h2>{text.createProject}</h2>
+                <h2><span className="step-num">1</span>{text.createProject}</h2>
               </div>
               <ProjectTemplatePicker
                 templates={projectTemplates}
@@ -3290,7 +3294,7 @@ export default function App() {
 
             <section className="panel">
               <div className="panel-header">
-                <h2>{text.paperIntake}</h2>
+                <h2><span className="step-num">2</span>{text.paperIntake}</h2>
               </div>
               <p className="muted">{text.paperIntakeBody}</p>
               <form className="stacked-form" onSubmit={handleUploadPaper}>
@@ -3405,7 +3409,7 @@ export default function App() {
 
 	          <section className="panel">
 	            <div className="panel-header">
-	              <h2>{text.executionConfig}</h2>
+	              <h2><span className="step-num">3</span>{text.executionConfig}</h2>
 	              <button disabled={!selectedProjectId} form="execution-config-form" type="submit">
 	                {text.saveExecutionConfig}
 	              </button>
@@ -3572,7 +3576,7 @@ export default function App() {
 	          <section className="grid two-up">
 	            <section className="panel">
               <div className="panel-header">
-                <h2>{text.planningGate}</h2>
+                <h2><span className="step-num">4</span>{text.planningGate}</h2>
                 <div className="inline-actions">
                   <button disabled={!selectedProjectId} onClick={handleGeneratePlan} type="button">
                     {text.generatePlan}
@@ -3592,7 +3596,7 @@ export default function App() {
 
             <section className="panel">
               <div className="panel-header">
-                <h2>{text.runSummary}</h2>
+                <h2><span className="step-num">5</span>{text.runSummary}</h2>
                 <div className="inline-actions">
                   <button disabled={!canPause} onClick={handlePauseRun} type="button">
                     {text.pauseRun}
@@ -3705,7 +3709,7 @@ export default function App() {
 
           <section className="panel">
             <div className="panel-header">
-              <h2>{text.pipelineStages}</h2>
+              <h2><span className="step-num">6</span>{text.pipelineStages}</h2>
             </div>
             <StageConfigEditor
               catalog={localizedStageCatalog}
@@ -3815,29 +3819,29 @@ export default function App() {
               </div>
             </section>
 
-            <section className="panel">
+            <section className="panel snapshot-panel">
               <div className="panel-header">
                 <h2>{text.sourceGroundingSnapshot}</h2>
-                <div className="inline-actions">
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => void handleReindexProject(false)}
-                    disabled={!selectedProjectId}
-                  >
-                    {text.reindexIncremental}
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => void handleReindexProject(true)}
-                    disabled={!selectedProjectId}
-                  >
-                    {text.reindexFull}
-                  </button>
-                </div>
               </div>
-              <form className="stacked-form" onSubmit={handleSearchGroundedPapers}>
+              <div className="snapshot-toolbar">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => void handleReindexProject(false)}
+                  disabled={!selectedProjectId}
+                >
+                  {text.reindexIncremental}
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => void handleReindexProject(true)}
+                  disabled={!selectedProjectId}
+                >
+                  {text.reindexFull}
+                </button>
+              </div>
+              <form className="stacked-form snapshot-search" onSubmit={handleSearchGroundedPapers}>
                 <label>
                   {text.groundedRetrieval}
                   <input
@@ -3855,47 +3859,67 @@ export default function App() {
                   </p>
                 ) : null}
               </form>
-              <div className="snapshot-list">
-                {groundedResults.length === 0 ? (
-                  <p className="muted">{text.noGroundedResults}</p>
-                ) : null}
-                {groundedResults.map((item) => (
-                  <div key={item.chunk_id} className="snapshot-item">
-                    {item.preview_thumbnail_url ? (
-                      <img
-                        alt={`${item.paper_title} ${text.preview}`}
-                        className="paper-thumb compact"
-                        loading="lazy"
-                        src={item.preview_thumbnail_url}
-                      />
-                    ) : null}
-                    <strong>{item.paper_title}</strong>
-                    <span>
-                      {item.citation_key || "uncited"} · {item.source_provider || item.source_type} · score{" "}
-                      {item.score.toFixed(3)}
-                    </span>
-                    <p>{item.text.slice(0, 260)}</p>
+              {groundedResults.length > 0 ? (
+                <div className="snapshot-group">
+                  <h3 className="snapshot-group-title">
+                    {text.sourceSnapshotResults}
+                    <span className="snapshot-count">{groundedResults.length}</span>
+                  </h3>
+                  <div className="snapshot-list snapshot-list-results">
+                    {groundedResults.map((item) => (
+                      <div key={item.chunk_id} className="snapshot-item">
+                        {item.preview_thumbnail_url ? (
+                          <img
+                            alt={`${item.paper_title} ${text.preview}`}
+                            className="paper-thumb compact"
+                            loading="lazy"
+                            src={item.preview_thumbnail_url}
+                          />
+                        ) : null}
+                        <div className="snapshot-body">
+                          <strong>{item.paper_title}</strong>
+                          <span>
+                            {item.citation_key || "uncited"} · {item.source_provider || item.source_type} · score{" "}
+                            {item.score.toFixed(3)}
+                          </span>
+                          <p>{item.text.slice(0, 260)}</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-              <div className="snapshot-list">
-                {(projectDetail?.papers ?? []).map((paper) => (
-                  <div key={paper.id} className="snapshot-item">
-                    {paper.preview_thumbnail_url ? (
-                      <img
-                        alt={`${paper.title} ${text.preview}`}
-                        className="paper-thumb compact"
-                        loading="lazy"
-                        src={paper.preview_thumbnail_url}
-                      />
-                    ) : null}
-                    <strong>{paper.title}</strong>
-                    <span>{paperSummaryLine(paper)}</span>
-                    {paper.authors_json?.length ? <p>{summarizeAuthors(paper.authors_json)}</p> : null}
-                    {paper.doi ? <p>{text.doiLabel}: {paper.doi}</p> : null}
-                    <p>{paper.extracted_text?.slice(0, 260) || paper.abstract?.slice(0, 260) || text.noExtractedText}</p>
-                  </div>
-                ))}
+                </div>
+              ) : (
+                <p className="muted snapshot-empty">{text.noGroundedResults}</p>
+              )}
+              <div className="snapshot-group">
+                <h3 className="snapshot-group-title">
+                  {text.sourceSnapshotPapers}
+                  <span className="snapshot-count">{projectDetail?.papers?.length ?? 0}</span>
+                </h3>
+                <div className="snapshot-list snapshot-list-papers">
+                  {(projectDetail?.papers ?? []).length === 0 ? (
+                    <p className="muted snapshot-empty">{text.noExtractedText}</p>
+                  ) : null}
+                  {(projectDetail?.papers ?? []).map((paper) => (
+                    <div key={paper.id} className="snapshot-item">
+                      {paper.preview_thumbnail_url ? (
+                        <img
+                          alt={`${paper.title} ${text.preview}`}
+                          className="paper-thumb compact"
+                          loading="lazy"
+                          src={paper.preview_thumbnail_url}
+                        />
+                      ) : null}
+                      <div className="snapshot-body">
+                        <strong>{paper.title}</strong>
+                        <span>{paperSummaryLine(paper)}</span>
+                        {paper.authors_json?.length ? <p>{summarizeAuthors(paper.authors_json)}</p> : null}
+                        {paper.doi ? <p>{text.doiLabel}: {paper.doi}</p> : null}
+                        <p>{paper.extracted_text?.slice(0, 260) || paper.abstract?.slice(0, 260) || text.noExtractedText}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
               <CitationGraphPanel
                 graph={citationGraph}
