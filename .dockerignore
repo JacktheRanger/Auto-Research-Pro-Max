@@ -1,0 +1,9 @@
+**/.git
+**/.venv
+**/.runtime
+**/node_modules
+**/dist
+**/__pycache__
+**/.DS_Store
+backend/data
+auto_research_pro_max.egg-info

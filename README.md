@@ -150,11 +150,22 @@ The frontend starts on [http://127.0.0.1:5173](http://127.0.0.1:5173).
 - Repository-aware sandbox execution requires Docker plus an explicit repo path or git URL and setup/run commands.
 - The current sandbox runtime preinstalls an allowlisted Python stack; broader dependency bootstrapping and recovery controls are still future work.
 
+## Deployment Recipes
+
+Beyond the local-first launcher, [`deploy/`](deploy/) ships reference Docker
+and Cloudflare deployments:
+
+- [`deploy/Dockerfile`](deploy/Dockerfile) + [`deploy/docker-compose.yml`](deploy/docker-compose.yml)
+  build a single container that bundles the FastAPI backend and the prebuilt
+  Vite frontend, with optional Docker-socket mounting for the sandbox stage.
+- [`deploy/cloudflare.md`](deploy/cloudflare.md) walks through publishing the
+  frontend on Cloudflare Pages and proxying `/api/*` to a self-hosted backend
+  via Cloudflare Tunnel.
+
 ## Roadmap
 
 - Add stronger recovery controls and broader dependency/bootstrap options for repository-aware sandbox runs.
 - Add branching to compare multiple hypotheses and per-project stage customization.
-- Provide Docker / Cloudflare deployment recipes alongside the local-first launcher.
 
 More planned work is tracked in [`TODO.md`](TODO.md).
 
@@ -315,11 +326,19 @@ npm run dev
 - 仓库感知的实验沙箱执行依赖 Docker，以及明确配置的 repo 路径或 git URL 和 setup/run 命令。
 - 当前沙箱 runtime 预装的是白名单 Python 依赖；更广泛的依赖引导和恢复控制仍属于后续工作。
 
+## 部署食谱
+
+除了本地一键启动器，[`deploy/`](deploy/) 目录下还提供了 Docker 与 Cloudflare 的参考部署：
+
+- [`deploy/Dockerfile`](deploy/Dockerfile) 与 [`deploy/docker-compose.yml`](deploy/docker-compose.yml)
+  构建一个同时包含 FastAPI 后端与 Vite 前端 bundle 的容器，可选挂载 Docker socket 以便沙箱阶段使用。
+- [`deploy/cloudflare.md`](deploy/cloudflare.md) 介绍如何用 Cloudflare Pages 发布前端，并通过
+  Cloudflare Tunnel 将 `/api/*` 反向代理到自托管的后端。
+
 ## 路线图
 
 - 为仓库感知的 sandbox 运行补充更强的恢复控制，以及更广泛的依赖/bootstrap 选项。
 - 增加分支对比与按项目自定义阶段列表。
-- 提供 Docker 与 Cloudflare 部署食谱。
 
 更多计划中的工作见 [`TODO.md`](TODO.md)。
 
