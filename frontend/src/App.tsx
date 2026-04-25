@@ -333,6 +333,20 @@ const uiCopy = {
     projectTemplatesHint: "Pick a research mode to pre-fill the form. You can still tweak any field before creating the project.",
     templateNone: "Custom (no template)",
     templateAppliedPrefix: "Template applied:",
+    projectSearchPlaceholder: "Search projects by title, idea, direction…",
+    projectIncludeArchived: "Show archived",
+    projectsEmpty: "No projects match the current filters.",
+    projectArchivedLabel: "archived",
+    projectDuplicatedLabel: "copy",
+    projectDuplicate: "Duplicate project",
+    projectArchive: "Archive project",
+    projectUnarchive: "Restore project",
+    projectDelete: "Delete project (irreversible)",
+    projectDuplicatedMessage: "Project duplicated.",
+    projectArchivedMessage: "Project archived.",
+    projectUnarchivedMessage: "Project restored.",
+    projectDeletedMessage: "Project deleted.",
+    projectDeleteConfirm: "Delete project \"{title}\" and all its papers / runs? This cannot be undone.",
   },
   cn: {
     ready: "已就绪。",
@@ -554,6 +568,20 @@ const uiCopy = {
     projectTemplatesHint: "选择一种研究模式以预填表单。仍然可以在创建前编辑任何字段。",
     templateNone: "自定义（不使用模板）",
     templateAppliedPrefix: "已应用模板：",
+    projectSearchPlaceholder: "按标题、想法、方向等搜索项目…",
+    projectIncludeArchived: "显示已归档项目",
+    projectsEmpty: "没有匹配当前筛选的项目。",
+    projectArchivedLabel: "已归档",
+    projectDuplicatedLabel: "副本",
+    projectDuplicate: "复制项目",
+    projectArchive: "归档项目",
+    projectUnarchive: "恢复项目",
+    projectDelete: "删除项目（不可恢复）",
+    projectDuplicatedMessage: "项目已复制。",
+    projectArchivedMessage: "项目已归档。",
+    projectUnarchivedMessage: "项目已恢复。",
+    projectDeletedMessage: "项目已删除。",
+    projectDeleteConfirm: "确认删除项目 “{title}” 及其所有论文/运行？此操作不可恢复。",
   },
 } satisfies Record<
   LocaleMode,
@@ -1513,6 +1541,8 @@ export default function App() {
   const [groundedStrategy, setGroundedStrategy] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [projectDetail, setProjectDetail] = useState<ProjectDetail | null>(null);
+  const [projectSearch, setProjectSearch] = useState("");
+  const [projectIncludeArchived, setProjectIncludeArchived] = useState(true);
   const [run, setRun] = useState<Run | null>(null);
   const [runStages, setRunStages] = useState<RunStage[]>([]);
   const [auditEvents, setAuditEvents] = useState<RunAuditEvent[]>([]);
@@ -1596,6 +1626,58 @@ export default function App() {
   async function refreshProjects() {
     const response = await api.listProjects();
     setProjects(response.projects);
+  }
+
+  const filteredProjects = useMemo(() => {
+    const term = projectSearch.trim().toLowerCase();
+    return projects
+      .filter((project) => projectIncludeArchived || !project.archived_at)
+      .filter((project) => {
+        if (!term) {
+          return true;
+        }
+        return [
+          project.title,
+          project.idea,
+          project.direction,
+          project.goals,
+          project.constraints_text,
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(term);
+      });
+  }, [projects, projectSearch, projectIncludeArchived]);
+
+  async function handleDuplicateProject(projectId: string) {
+    const response = await api.duplicateProject(projectId);
+    setProjects(response.projects);
+    setStatusMessage(text.projectDuplicatedMessage);
+    await loadProject(response.project.id);
+  }
+
+  async function handleToggleArchive(project: Project) {
+    const response = project.archived_at
+      ? await api.unarchiveProject(project.id)
+      : await api.archiveProject(project.id);
+    setProjects(response.projects);
+    setStatusMessage(project.archived_at ? text.projectUnarchivedMessage : text.projectArchivedMessage);
+  }
+
+  async function handleDeleteProject(project: Project) {
+    if (typeof window !== "undefined" && !window.confirm(text.projectDeleteConfirm.replace("{title}", project.title))) {
+      return;
+    }
+    const response = await api.deleteProject(project.id);
+    setProjects(response.projects);
+    if (selectedProjectId === project.id) {
+      setProjectDetail(null);
+      setSelectedProjectId(response.projects[0]?.id ?? "");
+      if (response.projects[0]) {
+        await loadProject(response.projects[0].id);
+      }
+    }
+    setStatusMessage(text.projectDeletedMessage);
   }
 
   async function loadProject(projectId: string) {
@@ -2189,18 +2271,71 @@ export default function App() {
             <div className="panel-header">
               <h2>{text.projects}</h2>
             </div>
+            <div className="project-controls">
+              <input
+                value={projectSearch}
+                onChange={(event) => setProjectSearch(event.target.value)}
+                placeholder={text.projectSearchPlaceholder}
+              />
+              <label className="inline-toggle">
+                <input
+                  type="checkbox"
+                  checked={projectIncludeArchived}
+                  onChange={(event) => setProjectIncludeArchived(event.target.checked)}
+                />
+                {text.projectIncludeArchived}
+              </label>
+            </div>
             <div className="project-list">
-              {projects.map((project) => (
-                <button
-                  key={project.id}
-                  className={`project-chip ${selectedProjectId === project.id ? "selected" : ""}`}
-                  onClick={() => void loadProject(project.id)}
-                  type="button"
-                >
-                  <strong>{project.title}</strong>
-                  <span>{project.status}</span>
-                </button>
-              ))}
+              {filteredProjects.length === 0 ? (
+                <p className="muted">{text.projectsEmpty}</p>
+              ) : null}
+              {filteredProjects.map((project) => {
+                const archived = Boolean(project.archived_at);
+                return (
+                  <div
+                    key={project.id}
+                    className={`project-chip-row ${selectedProjectId === project.id ? "selected" : ""} ${archived ? "archived" : ""}`}
+                  >
+                    <button
+                      className="project-chip"
+                      onClick={() => void loadProject(project.id)}
+                      type="button"
+                    >
+                      <strong>{project.title}</strong>
+                      <span>
+                        {project.status}
+                        {archived ? ` · ${text.projectArchivedLabel}` : ""}
+                        {project.duplicated_from ? ` · ${text.projectDuplicatedLabel}` : ""}
+                      </span>
+                    </button>
+                    <div className="project-chip-actions">
+                      <button
+                        type="button"
+                        title={text.projectDuplicate}
+                        onClick={() => void handleDuplicateProject(project.id)}
+                      >
+                        ⧉
+                      </button>
+                      <button
+                        type="button"
+                        title={archived ? text.projectUnarchive : text.projectArchive}
+                        onClick={() => void handleToggleArchive(project)}
+                      >
+                        {archived ? "⤴" : "📦"}
+                      </button>
+                      <button
+                        type="button"
+                        className="danger"
+                        title={text.projectDelete}
+                        onClick={() => void handleDeleteProject(project)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </section>
         </aside>
