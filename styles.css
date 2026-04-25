@@ -499,6 +499,13 @@ a:hover {
   .workflow-grid {
     gap: 0.8rem; /* 仅移动端收紧子卡片间距 */
   }
+  .demo-img {
+    /* 移动端用负 margin 抵消 .hero 左右 padding，缩小左右白边 */
+    margin-left: -1rem;
+    margin-right: -1rem;
+    width: calc(100% + 2rem);
+    max-width: none;
+  }
 }
 
 /* Back to Top Button */
