@@ -43,6 +43,7 @@ from .services.papers import (
 from .services.retrieval import search_literature
 from .services.runner import pause_run, reject_run, resume_run, retry_stage, rollback_run, start_run
 from .stages import STAGE_COUNT, stage_catalog
+from .templates import list_project_templates
 
 
 class SettingsPayload(BaseModel):
@@ -174,6 +175,11 @@ async def runtime_info() -> dict[str, Any]:
 @app.get("/api/stages")
 async def stages_endpoint() -> dict[str, Any]:
     return {"planning_gate": True, "stages": stage_catalog()}
+
+
+@app.get("/api/project-templates")
+async def project_templates() -> dict[str, Any]:
+    return {"templates": list_project_templates()}
 
 
 @app.get("/api/settings")

@@ -10,6 +10,7 @@ import {
   type Plan,
   type Project,
   type ProjectExecutionPayload,
+  type ProjectTemplate,
   type Run,
   type RunAuditEvent,
   type RunStage,
@@ -328,6 +329,10 @@ const uiCopy = {
     costPerStage: "Per stage",
     costNoUsage: "No model usage recorded yet.",
     costUsageDisclaimer: "Estimate uses approximate per-million rates; verify with your provider.",
+    projectTemplates: "Project Templates",
+    projectTemplatesHint: "Pick a research mode to pre-fill the form. You can still tweak any field before creating the project.",
+    templateNone: "Custom (no template)",
+    templateAppliedPrefix: "Template applied:",
   },
   cn: {
     ready: "已就绪。",
@@ -545,6 +550,10 @@ const uiCopy = {
     costPerStage: "按阶段",
     costNoUsage: "暂无模型用量记录。",
     costUsageDisclaimer: "估算基于大致的每百万 Token 价格，请与服务商账单核对。",
+    projectTemplates: "项目模板",
+    projectTemplatesHint: "选择一种研究模式以预填表单。仍然可以在创建前编辑任何字段。",
+    templateNone: "自定义（不使用模板）",
+    templateAppliedPrefix: "已应用模板：",
   },
 } satisfies Record<
   LocaleMode,
@@ -721,6 +730,54 @@ type PaperCardCopy = {
 type StageAttemptCopy = {
   retryAttempts: string;
 };
+
+type TemplatePickerCopy = {
+  projectTemplates: string;
+  projectTemplatesHint: string;
+  templateNone: string;
+};
+
+function ProjectTemplatePicker({
+  templates,
+  selectedKey,
+  text,
+  onSelect,
+}: {
+  templates: ProjectTemplate[];
+  selectedKey: string;
+  text: TemplatePickerCopy;
+  onSelect: (key: string) => void;
+}) {
+  if (!templates.length) {
+    return null;
+  }
+  return (
+    <div className="template-picker">
+      <strong>{text.projectTemplates}</strong>
+      <p className="muted template-hint">{text.projectTemplatesHint}</p>
+      <div className="template-options">
+        <button
+          type="button"
+          className={`template-option ${selectedKey ? "" : "is-active"}`}
+          onClick={() => onSelect("")}
+        >
+          {text.templateNone}
+        </button>
+        {templates.map((template) => (
+          <button
+            key={template.key}
+            type="button"
+            className={`template-option ${selectedKey === template.key ? "is-active" : ""}`}
+            onClick={() => onSelect(template.key)}
+          >
+            <strong>{template.label}</strong>
+            <span className="muted">{template.summary}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 type CostSummaryCopy = {
   costSummary: string;
@@ -1442,6 +1499,8 @@ export default function App() {
   const [settings, setSettings] = useState<Settings>(emptySettings);
   const [projects, setProjects] = useState<Project[]>([]);
   const [stageCatalog, setStageCatalog] = useState<StageCatalogItem[]>([]);
+  const [projectTemplates, setProjectTemplates] = useState<ProjectTemplate[]>([]);
+  const [selectedTemplateKey, setSelectedTemplateKey] = useState<string>("");
   const [projectForm, setProjectForm] = useState(emptyProjectForm);
   const [executionForm, setExecutionForm] = useState(emptyExecutionForm);
   const [urlPaper, setUrlPaper] = useState({ url: "", title: "", notes: "" });
@@ -1480,22 +1539,58 @@ export default function App() {
   const text = uiCopy[locale];
 
   async function bootstrap() {
-    const [healthResponse, runtimeResponse, stagesResponse, settingsResponse, projectResponse] =
+    const [healthResponse, runtimeResponse, stagesResponse, settingsResponse, projectResponse, templatesResponse] =
       await Promise.all([
         api.health(),
         api.getRuntime(),
         api.getStages(),
         api.getSettings(),
         api.listProjects(),
+        api.getProjectTemplates(),
       ]);
     setHealth(healthResponse);
     setRuntimeInfo(runtimeResponse);
     setStageCatalog(stagesResponse.stages);
     setSettings(settingsResponse);
     setProjects(projectResponse.projects);
+    setProjectTemplates(templatesResponse.templates);
     if (projectResponse.projects[0]) {
       await loadProject(projectResponse.projects[0].id);
     }
+  }
+
+  function applyProjectTemplate(key: string) {
+    if (!key) {
+      setSelectedTemplateKey("");
+      return;
+    }
+    const template = projectTemplates.find((entry) => entry.key === key);
+    if (!template) {
+      return;
+    }
+    const defaults = template.defaults;
+    setSelectedTemplateKey(key);
+    setProjectForm((current) => ({
+      ...current,
+      title: defaults.title ?? current.title,
+      idea: defaults.idea ?? current.idea,
+      background: defaults.background ?? current.background,
+      direction: defaults.direction ?? current.direction,
+      goals: defaults.goals ?? current.goals,
+      constraints_text: defaults.constraints_text ?? current.constraints_text,
+      compute_budget: defaults.compute_budget ?? current.compute_budget,
+      api_budget: defaults.api_budget ?? current.api_budget,
+    }));
+    setExecutionForm((current) => ({
+      ...current,
+      sandbox_setup_command: defaults.sandbox_setup_command ?? current.sandbox_setup_command,
+      sandbox_run_command: defaults.sandbox_run_command ?? current.sandbox_run_command,
+      expected_artifacts_text:
+        defaults.expected_artifacts && defaults.expected_artifacts.length
+          ? defaults.expected_artifacts.join("\n")
+          : current.expected_artifacts_text,
+    }));
+    setStatusMessage(`${text.templateAppliedPrefix} ${template.label}`);
   }
 
   async function refreshProjects() {
@@ -2116,6 +2211,12 @@ export default function App() {
               <div className="panel-header">
                 <h2>{text.createProject}</h2>
               </div>
+              <ProjectTemplatePicker
+                templates={projectTemplates}
+                selectedKey={selectedTemplateKey}
+                text={text}
+                onSelect={(key) => applyProjectTemplate(key)}
+              />
               <label>
                 <span className="field-label">
                   <span>{text.ideaTitle}</span>
