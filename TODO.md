@@ -13,4 +13,3 @@
 ## Product
 
 - Add authentication and multi-user workspaces.
-- Add richer run history, diffs, and artifact version browsing.

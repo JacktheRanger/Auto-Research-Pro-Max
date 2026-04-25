@@ -22,6 +22,7 @@ from .db import (
     get_run,
     init_db,
     list_papers,
+    list_project_runs,
     list_projects,
     list_run_audit_events,
     list_run_stages,
@@ -34,6 +35,7 @@ from .db import (
     update_project_execution_config,
 )
 from .services.citation_graph import build_citation_graph
+from .services.diffing import diff_runs
 from .services.events import event_hub
 from .services.grounding import reindex_project_papers, retrieve_grounded_snippets
 from .services.llm import generate_plan_markdown, test_connection
@@ -479,6 +481,27 @@ async def plan_approve(project_id: str) -> dict[str, Any]:
     if plan is None:
         raise HTTPException(status_code=404, detail="Plan not found")
     return {"plan": plan}
+
+
+@app.get("/api/projects/{project_id}/runs")
+async def projects_runs(project_id: str, limit: int = 50) -> dict[str, Any]:
+    project = get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    runs = list_project_runs(project_id, limit=limit)
+    return {"runs": runs}
+
+
+@app.get("/api/runs/{run_id}/diff")
+async def run_diff(run_id: str, against: str) -> dict[str, Any]:
+    run_a = get_run(run_id)
+    run_b = get_run(against)
+    if run_a is None or run_b is None:
+        raise HTTPException(status_code=404, detail="Run(s) not found")
+    if run_a["project_id"] != run_b["project_id"]:
+        raise HTTPException(status_code=400, detail="Runs belong to different projects")
+    diffs = diff_runs(list_run_stages(run_a["id"]), list_run_stages(run_b["id"]))
+    return {"run_a": run_a, "run_b": run_b, "stage_diffs": diffs}
 
 
 @app.post("/api/projects/{project_id}/runs/start")

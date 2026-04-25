@@ -6,6 +6,7 @@ import {
   type GroundedPaperResult,
   type LiteratureResult,
   type CitationGraph,
+  type RunDiff,
   type Paper,
   type PaperMetadataPayload,
   type Plan,
@@ -407,6 +408,18 @@ const uiCopy = {
     stageConfigError: "Could not save stage list:",
     stageConfigDisableLabel: "Skip this stage",
     stageConfigEnableAll: "Enable all stages",
+    runHistory: "Run history",
+    runHistoryEmpty: "No previous runs yet for this project.",
+    runHistoryError: "Failed to load run history:",
+    runHistoryLoad: "Load",
+    runDiffSelect: "Compare current run against:",
+    runDiffCompute: "Compute diff",
+    runDiffNone: "Pick a previous run to see stage-level diffs.",
+    runDiffStageStatus: "Status",
+    runDiffContent: "Content diff",
+    runDiffArtifacts: "Artifact diff",
+    runDiffNoChanges: "No content or artifact changes detected.",
+    runDiffError: "Failed to compute run diff:",
   },
   cn: {
     ready: "已就绪。",
@@ -689,6 +702,18 @@ const uiCopy = {
     stageConfigError: "保存阶段列表失败：",
     stageConfigDisableLabel: "跳过该阶段",
     stageConfigEnableAll: "启用全部阶段",
+    runHistory: "运行历史",
+    runHistoryEmpty: "该项目还没有历史运行。",
+    runHistoryError: "加载运行历史失败：",
+    runHistoryLoad: "查看",
+    runDiffSelect: "将当前运行与以下运行对比：",
+    runDiffCompute: "对比",
+    runDiffNone: "选择一个历史运行后即可查看阶段级 diff。",
+    runDiffStageStatus: "状态",
+    runDiffContent: "内容 diff",
+    runDiffArtifacts: "产物 diff",
+    runDiffNoChanges: "未检测到内容或产物变化。",
+    runDiffError: "运行对比失败：",
   },
 } satisfies Record<
   LocaleMode,
@@ -921,6 +946,129 @@ type CitationGraphCopy = {
   citationGraphReferences: string;
   citationGraphCitedBy: string;
 };
+
+type RunHistoryCopy = {
+  runHistory: string;
+  runHistoryEmpty: string;
+  runHistoryLoad: string;
+  runDiffSelect: string;
+  runDiffCompute: string;
+  runDiffNone: string;
+  runDiffStageStatus: string;
+  runDiffContent: string;
+  runDiffArtifacts: string;
+  runDiffNoChanges: string;
+};
+
+function RunHistoryPanel({
+  runs,
+  currentRunId,
+  diffAgainstRunId,
+  onSelectDiffRun,
+  onLoadRun,
+  onComputeDiff,
+  diff,
+  text,
+}: {
+  runs: Run[];
+  currentRunId: string;
+  diffAgainstRunId: string;
+  onSelectDiffRun: (runId: string) => void;
+  onLoadRun: (runId: string) => void;
+  onComputeDiff: () => void;
+  diff: RunDiff | null;
+  text: RunHistoryCopy;
+}) {
+  return (
+    <section className="panel run-history-panel">
+      <div className="panel-header">
+        <h2>{text.runHistory}</h2>
+      </div>
+      {runs.length === 0 ? (
+        <p className="muted">{text.runHistoryEmpty}</p>
+      ) : (
+        <ul className="run-history-list">
+          {runs.map((run) => (
+            <li
+              key={run.id}
+              className={`run-history-row ${currentRunId === run.id ? "active" : ""}`}
+            >
+              <div>
+                <strong>{run.id}</strong>
+                <span className="muted">
+                  {run.status} · {new Date(run.started_at).toLocaleString()} ·
+                  {" "}
+                  {run.current_stage_index}/{run.total_stages}
+                </span>
+              </div>
+              <div className="inline-actions">
+                <button type="button" onClick={() => onLoadRun(run.id)}>
+                  {text.runHistoryLoad}
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="run-diff-controls">
+        <label>
+          {text.runDiffSelect}
+          <select
+            value={diffAgainstRunId}
+            onChange={(event) => onSelectDiffRun(event.target.value)}
+            disabled={runs.length === 0}
+          >
+            <option value="">—</option>
+            {runs
+              .filter((run) => run.id !== currentRunId)
+              .map((run) => (
+                <option key={run.id} value={run.id}>
+                  {run.id} · {new Date(run.started_at).toLocaleDateString()}
+                </option>
+              ))}
+          </select>
+        </label>
+        <button type="button" disabled={!diffAgainstRunId} onClick={onComputeDiff}>
+          {text.runDiffCompute}
+        </button>
+      </div>
+      {!diff ? (
+        <p className="muted">{text.runDiffNone}</p>
+      ) : (
+        <div className="run-diff-list">
+          {diff.stage_diffs.map((entry) => {
+            const noChanges = !entry.content_changed && !entry.artifact_changed;
+            return (
+              <details key={entry.stage_key} className={`run-diff-row ${noChanges ? "is-clean" : ""}`}>
+                <summary>
+                  {entry.stage_index}. {entry.stage_label || entry.stage_key} ·{" "}
+                  {text.runDiffStageStatus}: {entry.status_a || "—"} → {entry.status_b || "—"}
+                </summary>
+                {noChanges ? (
+                  <p className="muted">{text.runDiffNoChanges}</p>
+                ) : (
+                  <>
+                    {entry.content_changed ? (
+                      <pre className="diff-block">
+                        <code>{entry.content_diff.join("\n") || text.runDiffNoChanges}</code>
+                      </pre>
+                    ) : null}
+                    {entry.artifact_changed ? (
+                      <pre className="diff-block">
+                        <strong>{text.runDiffArtifacts}</strong>
+                        <code>{entry.artifact_diff.join("\n")}</code>
+                      </pre>
+                    ) : null}
+                  </>
+                )}
+              </details>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
 
 type StageConfigCopy = {
   stageConfigTitle: string;
@@ -1939,6 +2087,9 @@ export default function App() {
   const [projectSearch, setProjectSearch] = useState("");
   const [projectIncludeArchived, setProjectIncludeArchived] = useState(true);
   const [citationGraph, setCitationGraph] = useState<CitationGraph | null>(null);
+  const [projectRuns, setProjectRuns] = useState<Run[]>([]);
+  const [diffAgainstRunId, setDiffAgainstRunId] = useState("");
+  const [runDiff, setRunDiff] = useState<RunDiff | null>(null);
   const [notifications, setNotifications] = useState<NotificationEntry[]>([]);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">(
     typeof Notification === "undefined" ? "unsupported" : Notification.permission,
@@ -2026,6 +2177,44 @@ export default function App() {
   async function refreshProjects() {
     const response = await api.listProjects();
     setProjects(response.projects);
+  }
+
+  async function refreshProjectRuns(projectId: string | null) {
+    if (!projectId) {
+      setProjectRuns([]);
+      return;
+    }
+    try {
+      const response = await api.listProjectRuns(projectId);
+      setProjectRuns(response.runs);
+    } catch (error) {
+      setStatusMessage(`${text.runHistoryError} ${(error as Error).message ?? ""}`);
+    }
+  }
+
+  async function handleLoadHistoricalRun(runId: string) {
+    try {
+      const response = await api.getRun(runId);
+      setRun(response.run);
+      setRunStages(response.stages);
+      setAuditEvents(response.audit_events ?? []);
+      setSelectedStageIndex(response.run.current_stage_index || 1);
+      setStatusMessage(`Loaded run ${runId}`);
+    } catch (error) {
+      setStatusMessage(`${text.runHistoryError} ${(error as Error).message ?? ""}`);
+    }
+  }
+
+  async function handleComputeDiff() {
+    if (!run || !diffAgainstRunId || diffAgainstRunId === run.id) {
+      return;
+    }
+    try {
+      const response = await api.diffRuns(run.id, diffAgainstRunId);
+      setRunDiff(response);
+    } catch (error) {
+      setStatusMessage(`${text.runDiffError} ${(error as Error).message ?? ""}`);
+    }
   }
 
   async function handleSaveStageConfig(disabledStageKeys: string[]) {
@@ -2132,6 +2321,9 @@ export default function App() {
     setGroundedStrategy("");
     setRun(detail.latest_run);
     void refreshCitationGraph(projectId);
+    void refreshProjectRuns(projectId);
+    setRunDiff(null);
+    setDiffAgainstRunId("");
     setSelectedStageIndex(detail.latest_run?.current_stage_index || 1);
     if (detail.latest_run) {
       const runDetail = await api.getRun(detail.latest_run.id);
@@ -3377,6 +3569,17 @@ export default function App() {
               <p className="muted">{text.reducedPipelineNote}</p>
             </section>
           </section>
+
+          <RunHistoryPanel
+            runs={projectRuns}
+            currentRunId={run?.id ?? ""}
+            diffAgainstRunId={diffAgainstRunId}
+            onSelectDiffRun={setDiffAgainstRunId}
+            onLoadRun={(runId) => void handleLoadHistoricalRun(runId)}
+            onComputeDiff={() => void handleComputeDiff()}
+            diff={runDiff}
+            text={text}
+          />
 
           <section className="panel">
             <div className="panel-header">

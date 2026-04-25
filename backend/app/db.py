@@ -1024,6 +1024,15 @@ def get_latest_run(project_id: str) -> dict[str, Any] | None:
     return _to_dict(row)
 
 
+def list_project_runs(project_id: str, *, limit: int = 50) -> list[dict[str, Any]]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM runs WHERE project_id = ? ORDER BY started_at DESC LIMIT ?",
+            (project_id, max(1, limit)),
+        ).fetchall()
+    return [_to_dict(row) for row in rows if row is not None]
+
+
 def get_run(run_id: str) -> dict[str, Any] | None:
     with _connect() as conn:
         row = conn.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
