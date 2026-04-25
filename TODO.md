@@ -19,5 +19,4 @@
 
 - Add authentication and multi-user workspaces.
 - Add richer run history, diffs, and artifact version browsing.
-- Add first-class Windows support, including one-click start/stop scripts and packaging.
 - Add deployment recipes for Docker and Cloudflare-hosted frontend plus API backend.
