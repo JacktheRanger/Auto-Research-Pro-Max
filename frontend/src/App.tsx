@@ -394,6 +394,11 @@ const uiCopy = {
     citationGraphReferences: "References",
     citationGraphCitedBy: "Cited by",
     citationGraphError: "Failed to load citation graph:",
+    reindexIncremental: "Re-index (changed only)",
+    reindexFull: "Force full re-index",
+    reindexResult:
+      "Indexed {indexed} papers, skipped {skipped} unchanged, {embedded} embedded out of {total}.",
+    reindexError: "Re-index failed:",
   },
   cn: {
     ready: "已就绪。",
@@ -665,6 +670,10 @@ const uiCopy = {
     citationGraphReferences: "引用",
     citationGraphCitedBy: "被引用",
     citationGraphError: "无法加载引用图：",
+    reindexIncremental: "增量重建索引",
+    reindexFull: "强制完整重建",
+    reindexResult: "已重建 {indexed} 篇，跳过未变化 {skipped} 篇，共 {embedded}/{total} 篇有 embedding。",
+    reindexError: "重建索引失败：",
   },
 } satisfies Record<
   LocaleMode,
@@ -1921,6 +1930,24 @@ export default function App() {
   async function refreshProjects() {
     const response = await api.listProjects();
     setProjects(response.projects);
+  }
+
+  async function handleReindexProject(force: boolean) {
+    if (!selectedProjectId) {
+      return;
+    }
+    try {
+      const response = await api.reindexProject(selectedProjectId, force);
+      const message =
+        text.reindexResult.replace("{indexed}", String(response.papers_indexed))
+          .replace("{skipped}", String(response.papers_skipped))
+          .replace("{embedded}", String(response.embedding_ready))
+          .replace("{total}", String(response.papers_total));
+      setStatusMessage(message);
+      await refreshCitationGraph(selectedProjectId);
+    } catch (error) {
+      setStatusMessage(`${text.reindexError} ${(error as Error).message ?? ""}`);
+    }
   }
 
   async function refreshCitationGraph(projectId: string | null) {
@@ -3348,6 +3375,24 @@ export default function App() {
             <section className="panel">
               <div className="panel-header">
                 <h2>{text.sourceGroundingSnapshot}</h2>
+                <div className="inline-actions">
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => void handleReindexProject(false)}
+                    disabled={!selectedProjectId}
+                  >
+                    {text.reindexIncremental}
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => void handleReindexProject(true)}
+                    disabled={!selectedProjectId}
+                  >
+                    {text.reindexFull}
+                  </button>
+                </div>
               </div>
               <form className="stacked-form" onSubmit={handleSearchGroundedPapers}>
                 <label>

@@ -34,7 +34,7 @@ from .db import (
 )
 from .services.citation_graph import build_citation_graph
 from .services.events import event_hub
-from .services.grounding import retrieve_grounded_snippets
+from .services.grounding import reindex_project_papers, retrieve_grounded_snippets
 from .services.llm import generate_plan_markdown, test_connection
 from .services.papers import (
     refresh_paper_metadata,
@@ -311,6 +311,19 @@ async def papers_url(project_id: str, payload: RemotePaperPayload) -> dict[str, 
         raise HTTPException(status_code=404, detail="Project not found")
     paper = await save_remote_paper(project_id, payload.url, payload.title, payload.notes, get_settings())
     return {"paper": paper, "papers": list_papers(project_id)}
+
+
+class ReindexPayload(BaseModel):
+    force: bool = False
+
+
+@app.post("/api/projects/{project_id}/reindex")
+async def projects_reindex(project_id: str, payload: ReindexPayload | None = None) -> dict[str, Any]:
+    project = get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    options = (payload or ReindexPayload()).model_dump()
+    return reindex_project_papers(project_id, get_settings(), force=options.get("force", False))
 
 
 @app.get("/api/projects/{project_id}/citation-graph")
