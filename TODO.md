@@ -2,7 +2,6 @@
 
 ## High Priority
 
-- Add fixture repositories and Docker-backed smoke coverage for repository-aware sandbox execution.
 - Broaden sandbox dependency/bootstrap options and recovery controls for repository-aware benchmark runs.
 
 ## Retrieval And Papers

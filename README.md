@@ -150,6 +150,20 @@ The frontend starts on [http://127.0.0.1:5173](http://127.0.0.1:5173).
 - Repository-aware sandbox execution requires Docker plus an explicit repo path or git URL and setup/run commands.
 - The current sandbox runtime preinstalls an allowlisted Python stack; broader dependency bootstrapping and recovery controls are still future work.
 
+## Tests
+
+Install dev extras and run the bundled pytest suite:
+
+```bash
+pip install -e ".[dev]"
+pytest
+```
+
+The sandbox smoke coverage under `tests/test_sandbox_smoke.py` runs the
+fixture repositories in `tests/fixtures/sandbox/`; the Docker-backed
+parametrized cases skip cleanly when no Docker daemon is available, while the
+offline manifest assertion still runs.
+
 ## Deployment Recipes
 
 Beyond the local-first launcher, [`deploy/`](deploy/) ships reference Docker
