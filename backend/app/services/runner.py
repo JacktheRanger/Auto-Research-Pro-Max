@@ -8,6 +8,65 @@ from typing import Any, Literal
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
+
+def _accumulate_run_cost(
+    run_id: str,
+    stage_index: int,
+    stage_key: str,
+    usage: dict[str, Any],
+) -> None:
+    run = get_run(run_id)
+    if run is None:
+        return
+    metadata = dict(run.get("metadata_json") or {})
+    cost_summary = dict(metadata.get("cost_summary") or {})
+    totals = dict(cost_summary.get("totals") or {})
+    per_stage = list(cost_summary.get("per_stage") or [])
+    per_model = dict(cost_summary.get("per_model") or {})
+
+    input_tokens = int(usage.get("input_tokens") or 0)
+    output_tokens = int(usage.get("output_tokens") or 0)
+    total_tokens = int(usage.get("total_tokens") or input_tokens + output_tokens)
+    cost_usd = float(usage.get("cost_usd") or 0.0)
+    model = str(usage.get("model") or "")
+
+    totals["input_tokens"] = int(totals.get("input_tokens") or 0) + input_tokens
+    totals["output_tokens"] = int(totals.get("output_tokens") or 0) + output_tokens
+    totals["total_tokens"] = int(totals.get("total_tokens") or 0) + total_tokens
+    totals["cost_usd"] = round(float(totals.get("cost_usd") or 0.0) + cost_usd, 6)
+
+    per_stage.append(
+        {
+            "stage_index": stage_index,
+            "stage_key": stage_key,
+            "model": model,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": total_tokens,
+            "cost_usd": cost_usd,
+        }
+    )
+    per_stage = per_stage[-200:]
+
+    if model:
+        existing = dict(per_model.get(model) or {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0, "calls": 0})
+        existing["input_tokens"] = int(existing.get("input_tokens") or 0) + input_tokens
+        existing["output_tokens"] = int(existing.get("output_tokens") or 0) + output_tokens
+        existing["cost_usd"] = round(float(existing.get("cost_usd") or 0.0) + cost_usd, 6)
+        existing["calls"] = int(existing.get("calls") or 0) + 1
+        per_model[model] = existing
+
+    cost_summary.update(
+        {
+            "totals": totals,
+            "per_stage": per_stage,
+            "per_model": per_model,
+            "last_updated": _now_iso(),
+        }
+    )
+    metadata["cost_summary"] = cost_summary
+    update_run(run_id, metadata_json=metadata)
+
 from ..db import (
     append_run_audit_event,
     append_run_event,
@@ -471,6 +530,11 @@ async def execute_run(run_id: str, settings: dict[str, Any]) -> None:
                 )
                 await _emit(run_id)
                 return
+
+            usage = (payload or {}).get("usage") or {}
+            if usage:
+                stage_metadata["usage"] = usage
+                _accumulate_run_cost(run_id, stage.index, stage.key, usage)
 
             update_stage(
                 run_id,
