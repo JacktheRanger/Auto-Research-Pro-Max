@@ -19,4 +19,3 @@
 
 - Add authentication and multi-user workspaces.
 - Add richer run history, diffs, and artifact version browsing.
-- Add deployment recipes for Docker and Cloudflare-hosted frontend plus API backend.

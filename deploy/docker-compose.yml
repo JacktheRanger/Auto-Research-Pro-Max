@@ -1,0 +1,28 @@
+# Run Auto Research Pro Max locally with persistent storage and (optionally)
+# expose the host Docker socket so the experiment sandbox stage can spin up
+# its own helper containers.
+#
+# Usage:
+#   docker compose -f deploy/docker-compose.yml up --build
+#
+# Environment variables:
+#   AUTO_RESEARCH_PORT   override the host port (default 8000)
+
+services:
+  auto-research:
+    image: auto-research-pro-max:latest
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    ports:
+      - "${AUTO_RESEARCH_PORT:-8000}:8000"
+    environment:
+      OCR_LANGUAGES: ${OCR_LANGUAGES:-eng}
+    volumes:
+      # Persist SQLite + uploaded papers + sandbox artifacts.
+      - ./data:/app/backend/data
+      # Optional: enable repository-aware sandbox by mounting the host
+      # Docker socket. Comment this out if the deployment must not be able to
+      # spawn sibling containers.
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
