@@ -29,6 +29,12 @@ export type Project = {
   updated_at: string;
   archived_at?: string;
   duplicated_from?: string;
+  sandbox_base_image?: string;
+  sandbox_extra_packages?: string[];
+  sandbox_apt_packages?: string[];
+  sandbox_pip_index_url?: string;
+  sandbox_timeout_seconds?: number;
+  sandbox_max_attempts?: number;
 };
 
 export type ProjectCreatePayload = {
@@ -57,6 +63,12 @@ export type ProjectExecutionPayload = {
   sandbox_setup_command: string;
   sandbox_run_command: string;
   expected_artifacts: string[];
+  sandbox_base_image?: string;
+  sandbox_extra_packages?: string[];
+  sandbox_apt_packages?: string[];
+  sandbox_pip_index_url?: string;
+  sandbox_timeout_seconds?: number;
+  sandbox_max_attempts?: number;
 };
 
 export type Paper = {

@@ -2,7 +2,6 @@
 
 ## High Priority
 
-- Broaden sandbox dependency/bootstrap options and recovery controls for repository-aware benchmark runs.
 
 ## Retrieval And Papers
 

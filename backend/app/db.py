@@ -29,6 +29,8 @@ _JSON_DEFAULTS: dict[str, Any] = {
     "embedding_json": [],
     "expected_artifacts": [],
     "audit_metadata_json": {},
+    "sandbox_extra_packages": [],
+    "sandbox_apt_packages": [],
 }
 
 
@@ -270,6 +272,12 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         ("expected_artifacts", "TEXT NOT NULL DEFAULT '[]'"),
         ("archived_at", "TEXT NOT NULL DEFAULT ''"),
         ("duplicated_from", "TEXT NOT NULL DEFAULT ''"),
+        ("sandbox_base_image", "TEXT NOT NULL DEFAULT ''"),
+        ("sandbox_extra_packages", "TEXT NOT NULL DEFAULT '[]'"),
+        ("sandbox_timeout_seconds", "INTEGER NOT NULL DEFAULT 0"),
+        ("sandbox_pip_index_url", "TEXT NOT NULL DEFAULT ''"),
+        ("sandbox_max_attempts", "INTEGER NOT NULL DEFAULT 0"),
+        ("sandbox_apt_packages", "TEXT NOT NULL DEFAULT '[]'"),
     ):
         _ensure_column(conn, "projects", name, definition)
 
@@ -467,6 +475,12 @@ def update_project_execution_config(project_id: str, payload: dict[str, Any]) ->
                 sandbox_setup_command = ?,
                 sandbox_run_command = ?,
                 expected_artifacts = ?,
+                sandbox_base_image = ?,
+                sandbox_extra_packages = ?,
+                sandbox_timeout_seconds = ?,
+                sandbox_pip_index_url = ?,
+                sandbox_max_attempts = ?,
+                sandbox_apt_packages = ?,
                 updated_at = ?
             WHERE id = ?
             """,
@@ -478,6 +492,12 @@ def update_project_execution_config(project_id: str, payload: dict[str, Any]) ->
                 payload.get("sandbox_setup_command", ""),
                 payload.get("sandbox_run_command", ""),
                 _json_dump(payload.get("expected_artifacts", [])),
+                payload.get("sandbox_base_image", ""),
+                _json_dump(payload.get("sandbox_extra_packages") or []),
+                int(payload.get("sandbox_timeout_seconds") or 0),
+                payload.get("sandbox_pip_index_url", ""),
+                int(payload.get("sandbox_max_attempts") or 0),
+                _json_dump(payload.get("sandbox_apt_packages") or []),
                 utc_now(),
                 project_id,
             ),

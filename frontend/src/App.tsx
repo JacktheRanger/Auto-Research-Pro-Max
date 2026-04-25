@@ -366,6 +366,23 @@ const uiCopy = {
     notificationApprovalNeededTitle: "Approval needed",
     notificationRunCompleteTitle: "Run complete",
     notificationRunFailedTitle: "Run failed",
+    sandboxAdvanced: "Advanced sandbox options",
+    sandboxAdvancedHint:
+      "Override the runtime image, extra Python or apt packages, and a custom pip index. Set max attempts to 2-3 to retry transient sandbox failures.",
+    sandboxBaseImage: "Base image",
+    sandboxBaseImagePlaceholder: "python:3.11-slim (default)",
+    sandboxExtraPackages: "Extra Python packages",
+    sandboxExtraPackagesPlaceholder:
+      "One package per line, e.g.\ntorch\ntransformers",
+    sandboxAptPackages: "Extra apt packages",
+    sandboxAptPackagesPlaceholder:
+      "One package per line, e.g.\nbuild-essential\nffmpeg",
+    sandboxPipIndex: "Custom pip index URL",
+    sandboxPipIndexPlaceholder: "https://pypi.org/simple",
+    sandboxTimeoutSeconds: "Timeout (seconds)",
+    sandboxTimeoutPlaceholder: "300",
+    sandboxMaxAttempts: "Max sandbox attempts",
+    sandboxMaxAttemptsPlaceholder: "1",
   },
   cn: {
     ready: "已就绪。",
@@ -612,6 +629,21 @@ const uiCopy = {
     notificationApprovalNeededTitle: "需要审批",
     notificationRunCompleteTitle: "运行已完成",
     notificationRunFailedTitle: "运行失败",
+    sandboxAdvanced: "高级沙箱选项",
+    sandboxAdvancedHint:
+      "可自定义运行时镜像、额外 Python / apt 包，以及私有 pip index。最大尝试次数 2-3 用于重试临时性沙箱失败。",
+    sandboxBaseImage: "基础镜像",
+    sandboxBaseImagePlaceholder: "python:3.11-slim（默认）",
+    sandboxExtraPackages: "额外 Python 包",
+    sandboxExtraPackagesPlaceholder: "每行一个包，如：\ntorch\ntransformers",
+    sandboxAptPackages: "额外 apt 包",
+    sandboxAptPackagesPlaceholder: "每行一个包，如：\nbuild-essential\nffmpeg",
+    sandboxPipIndex: "自定义 pip index URL",
+    sandboxPipIndexPlaceholder: "https://pypi.org/simple",
+    sandboxTimeoutSeconds: "超时秒数",
+    sandboxTimeoutPlaceholder: "300",
+    sandboxMaxAttempts: "沙箱最大尝试次数",
+    sandboxMaxAttemptsPlaceholder: "1",
   },
 } satisfies Record<
   LocaleMode,
@@ -646,6 +678,12 @@ const emptyExecutionForm = {
   sandbox_setup_command: "",
   sandbox_run_command: "",
   expected_artifacts_text: "",
+  sandbox_base_image: "",
+  sandbox_extra_packages_text: "",
+  sandbox_apt_packages_text: "",
+  sandbox_pip_index_url: "",
+  sandbox_timeout_seconds: "",
+  sandbox_max_attempts: "",
 };
 
 type ProjectDetail = {
@@ -674,6 +712,18 @@ function projectToExecutionForm(project: Project | null) {
     sandbox_setup_command: project.sandbox_setup_command || "",
     sandbox_run_command: project.sandbox_run_command || "",
     expected_artifacts_text: (project.expected_artifacts || []).join("\n"),
+    sandbox_base_image: project.sandbox_base_image || "",
+    sandbox_extra_packages_text: (project.sandbox_extra_packages || []).join("\n"),
+    sandbox_apt_packages_text: (project.sandbox_apt_packages || []).join("\n"),
+    sandbox_pip_index_url: project.sandbox_pip_index_url || "",
+    sandbox_timeout_seconds:
+      project.sandbox_timeout_seconds && project.sandbox_timeout_seconds > 0
+        ? String(project.sandbox_timeout_seconds)
+        : "",
+    sandbox_max_attempts:
+      project.sandbox_max_attempts && project.sandbox_max_attempts > 0
+        ? String(project.sandbox_max_attempts)
+        : "",
   };
 }
 
@@ -686,6 +736,16 @@ function executionPayloadFromForm(form: typeof emptyExecutionForm): ProjectExecu
     sandbox_setup_command: form.sandbox_setup_command.trim(),
     sandbox_run_command: form.sandbox_run_command.trim(),
     expected_artifacts: parseExpectedArtifacts(form.expected_artifacts_text),
+    sandbox_base_image: form.sandbox_base_image.trim(),
+    sandbox_extra_packages: parseExpectedArtifacts(form.sandbox_extra_packages_text),
+    sandbox_apt_packages: parseExpectedArtifacts(form.sandbox_apt_packages_text),
+    sandbox_pip_index_url: form.sandbox_pip_index_url.trim(),
+    sandbox_timeout_seconds: form.sandbox_timeout_seconds
+      ? Math.max(0, Number(form.sandbox_timeout_seconds) || 0)
+      : 0,
+    sandbox_max_attempts: form.sandbox_max_attempts
+      ? Math.max(0, Number(form.sandbox_max_attempts) || 0)
+      : 0,
   };
 }
 
@@ -2838,6 +2898,92 @@ export default function App() {
 	                  placeholder={text.expectedArtifactsPlaceholder}
 	                />
 	              </label>
+	              <details className="sandbox-advanced">
+	                <summary>{text.sandboxAdvanced}</summary>
+	                <p className="muted">{text.sandboxAdvancedHint}</p>
+	                <label>
+	                  {text.sandboxBaseImage}
+	                  <input
+	                    value={executionForm.sandbox_base_image}
+	                    onChange={(event) =>
+	                      setExecutionForm({ ...executionForm, sandbox_base_image: event.target.value })
+	                    }
+	                    placeholder={text.sandboxBaseImagePlaceholder}
+	                  />
+	                </label>
+	                <label>
+	                  {text.sandboxExtraPackages}
+	                  <textarea
+	                    value={executionForm.sandbox_extra_packages_text}
+	                    onChange={(event) =>
+	                      setExecutionForm({
+	                        ...executionForm,
+	                        sandbox_extra_packages_text: event.target.value,
+	                      })
+	                    }
+	                    placeholder={text.sandboxExtraPackagesPlaceholder}
+	                  />
+	                </label>
+	                <label>
+	                  {text.sandboxAptPackages}
+	                  <textarea
+	                    value={executionForm.sandbox_apt_packages_text}
+	                    onChange={(event) =>
+	                      setExecutionForm({
+	                        ...executionForm,
+	                        sandbox_apt_packages_text: event.target.value,
+	                      })
+	                    }
+	                    placeholder={text.sandboxAptPackagesPlaceholder}
+	                  />
+	                </label>
+	                <label>
+	                  {text.sandboxPipIndex}
+	                  <input
+	                    value={executionForm.sandbox_pip_index_url}
+	                    onChange={(event) =>
+	                      setExecutionForm({
+	                        ...executionForm,
+	                        sandbox_pip_index_url: event.target.value,
+	                      })
+	                    }
+	                    placeholder={text.sandboxPipIndexPlaceholder}
+	                  />
+	                </label>
+	                <div className="split-fields">
+	                  <label>
+	                    {text.sandboxTimeoutSeconds}
+	                    <input
+	                      type="number"
+	                      min="0"
+	                      value={executionForm.sandbox_timeout_seconds}
+	                      onChange={(event) =>
+	                        setExecutionForm({
+	                          ...executionForm,
+	                          sandbox_timeout_seconds: event.target.value,
+	                        })
+	                      }
+	                      placeholder={text.sandboxTimeoutPlaceholder}
+	                    />
+	                  </label>
+	                  <label>
+	                    {text.sandboxMaxAttempts}
+	                    <input
+	                      type="number"
+	                      min="1"
+	                      max="3"
+	                      value={executionForm.sandbox_max_attempts}
+	                      onChange={(event) =>
+	                        setExecutionForm({
+	                          ...executionForm,
+	                          sandbox_max_attempts: event.target.value,
+	                        })
+	                      }
+	                      placeholder={text.sandboxMaxAttemptsPlaceholder}
+	                    />
+	                  </label>
+	                </div>
+	              </details>
 	            </form>
 	          </section>
 
