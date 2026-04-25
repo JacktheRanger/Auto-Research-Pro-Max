@@ -266,6 +266,28 @@ const uiCopy = {
       `Optional comment for "${action}" (leave blank to record without notes):`,
     decidedByPrompt: "Optional decider name or handle (leave blank to skip):",
     gateDecisionLabel: "Gate decision",
+    validationReport: "Validation Report",
+    validationStatusOk: "Passed",
+    validationStatusFailed: "Failed",
+    validationErrors: "Errors",
+    validationWarnings: "Warnings",
+    validationMarkdown: "Markdown structure",
+    validationSchema: "Artifact schema",
+    validationSemantic: "Semantic checks",
+    validationMissingHeadings: "Missing headings",
+    validationOrderedHeadings: "Required headings present",
+    validationRequiredKeys: "Required artifact keys",
+    validationUnexpectedKeys: "Unexpected artifact keys",
+    validationMustProduceCoverage: "Must-produce coverage",
+    validationDisallowedFindings: "Disallowed clause matches",
+    validationListSize: "List size",
+    validationCovered: "covered",
+    validationUncovered: "uncovered",
+    validationTriggered: "triggered",
+    validationOk: "ok",
+    validationNoData: "No validation report yet — run this stage first.",
+    validationToggleShow: "Show validation",
+    validationToggleHide: "Hide validation",
   },
   cn: {
     ready: "已就绪。",
@@ -422,6 +444,28 @@ const uiCopy = {
       `请输入“${action}”的可选备注（留空表示无备注）:`,
     decidedByPrompt: "可选填写决策人名称（留空跳过）:",
     gateDecisionLabel: "门控决策",
+    validationReport: "校验报告",
+    validationStatusOk: "通过",
+    validationStatusFailed: "未通过",
+    validationErrors: "错误",
+    validationWarnings: "警告",
+    validationMarkdown: "Markdown 结构",
+    validationSchema: "产物 Schema",
+    validationSemantic: "语义检查",
+    validationMissingHeadings: "缺失的标题",
+    validationOrderedHeadings: "已包含的必需标题",
+    validationRequiredKeys: "必需产物键",
+    validationUnexpectedKeys: "未声明的产物键",
+    validationMustProduceCoverage: "must-produce 覆盖度",
+    validationDisallowedFindings: "禁止条款命中",
+    validationListSize: "列表条目数",
+    validationCovered: "已覆盖",
+    validationUncovered: "未覆盖",
+    validationTriggered: "触发",
+    validationOk: "正常",
+    validationNoData: "还没有校验报告 — 运行该阶段后会出现。",
+    validationToggleShow: "展开校验",
+    validationToggleHide: "收起校验",
   },
 } satisfies Record<
   LocaleMode,
@@ -501,6 +545,227 @@ function executionPayloadFromForm(form: typeof emptyExecutionForm): ProjectExecu
 
 function prettyJson(value: unknown) {
   return JSON.stringify(value ?? {}, null, 2);
+}
+
+type ValidationReport = {
+  ok: boolean;
+  errors: string[];
+  warnings: string[];
+  contract: {
+    inputs_count: number;
+    must_produce_count: number;
+    quality_bar_count: number;
+    disallowed_count: number;
+    required_headings: string[];
+  };
+  markdown: {
+    required: string[];
+    present: string[];
+    title_heading_present: boolean;
+  };
+  artifact_schema: {
+    required_keys: string[];
+    validated_keys: string[];
+    unexpected_keys: string[];
+  };
+  semantic?: {
+    must_produce_coverage: Array<{
+      expectation: string;
+      matched_tokens: string[];
+      required_match_count?: number;
+      covered: boolean;
+    }>;
+    disallowed_findings: Array<{
+      clause: string;
+      matched_tokens: string[];
+      trigger_threshold: number;
+      triggered: boolean;
+    }>;
+    list_size_findings: Array<{ key: string; count: number; minimum: number }>;
+    uncovered_count: number;
+    disallowed_triggered_count: number;
+  };
+};
+
+type ValidationCopy = {
+  validationReport: string;
+  validationStatusOk: string;
+  validationStatusFailed: string;
+  validationErrors: string;
+  validationWarnings: string;
+  validationMarkdown: string;
+  validationSchema: string;
+  validationSemantic: string;
+  validationMissingHeadings: string;
+  validationOrderedHeadings: string;
+  validationRequiredKeys: string;
+  validationUnexpectedKeys: string;
+  validationMustProduceCoverage: string;
+  validationDisallowedFindings: string;
+  validationListSize: string;
+  validationCovered: string;
+  validationUncovered: string;
+  validationTriggered: string;
+  validationOk: string;
+  validationNoData: string;
+  validationToggleShow: string;
+  validationToggleHide: string;
+};
+
+function ValidationReportPanel({
+  report,
+  text,
+}: {
+  report: ValidationReport | undefined;
+  text: ValidationCopy;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  if (!report) {
+    return (
+      <div className="detail-block validation-block">
+        <h3>{text.validationReport}</h3>
+        <p className="muted">{text.validationNoData}</p>
+      </div>
+    );
+  }
+  const missingHeadings = report.markdown.required.filter(
+    (heading) => !report.markdown.present.includes(heading),
+  );
+  const semantic = report.semantic;
+  return (
+    <div className={`detail-block validation-block validation-${report.ok ? "ok" : "failed"}`}>
+      <div className="validation-head">
+        <h3>{text.validationReport}</h3>
+        <span className={`validation-pill validation-pill-${report.ok ? "ok" : "failed"}`}>
+          {report.ok ? text.validationStatusOk : text.validationStatusFailed}
+        </span>
+        <button
+          className="validation-toggle"
+          type="button"
+          onClick={() => setExpanded((current) => !current)}
+        >
+          {expanded ? text.validationToggleHide : text.validationToggleShow}
+        </button>
+      </div>
+      {expanded ? (
+        <div className="validation-body">
+          {report.errors.length ? (
+            <div className="validation-section validation-section-errors">
+              <strong>{text.validationErrors}</strong>
+              <ul>
+                {report.errors.map((message) => (
+                  <li key={`err-${message}`}>{message}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {report.warnings.length ? (
+            <div className="validation-section validation-section-warnings">
+              <strong>{text.validationWarnings}</strong>
+              <ul>
+                {report.warnings.map((message) => (
+                  <li key={`warn-${message}`}>{message}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <div className="validation-grid">
+            <div>
+              <strong>{text.validationMarkdown}</strong>
+              <p>
+                {text.validationOrderedHeadings}: {report.markdown.present.length}/
+                {report.markdown.required.length}
+              </p>
+              {missingHeadings.length ? (
+                <p className="muted">
+                  {text.validationMissingHeadings}: {missingHeadings.join(", ")}
+                </p>
+              ) : null}
+            </div>
+            <div>
+              <strong>{text.validationSchema}</strong>
+              <p>
+                {text.validationRequiredKeys}: {report.artifact_schema.validated_keys.length}/
+                {report.artifact_schema.required_keys.length}
+              </p>
+              {report.artifact_schema.unexpected_keys.length ? (
+                <p className="muted">
+                  {text.validationUnexpectedKeys}:{" "}
+                  {report.artifact_schema.unexpected_keys.join(", ")}
+                </p>
+              ) : null}
+            </div>
+            {semantic ? (
+              <div>
+                <strong>{text.validationSemantic}</strong>
+                <p>
+                  {text.validationMustProduceCoverage}:{" "}
+                  {semantic.must_produce_coverage.length - semantic.uncovered_count}/
+                  {semantic.must_produce_coverage.length} {text.validationCovered}
+                </p>
+                <p>
+                  {text.validationDisallowedFindings}: {semantic.disallowed_triggered_count}{" "}
+                  {text.validationTriggered}
+                </p>
+              </div>
+            ) : null}
+          </div>
+          {semantic && semantic.must_produce_coverage.length ? (
+            <details className="validation-details">
+              <summary>{text.validationMustProduceCoverage}</summary>
+              <ul>
+                {semantic.must_produce_coverage.map((entry) => (
+                  <li key={`prod-${entry.expectation}`}>
+                    <span
+                      className={`validation-pill validation-pill-${entry.covered ? "ok" : "failed"}`}
+                    >
+                      {entry.covered ? text.validationCovered : text.validationUncovered}
+                    </span>{" "}
+                    {entry.expectation}
+                    {entry.matched_tokens.length ? (
+                      <span className="muted"> · {entry.matched_tokens.join(", ")}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+          {semantic && semantic.disallowed_findings.length ? (
+            <details className="validation-details">
+              <summary>{text.validationDisallowedFindings}</summary>
+              <ul>
+                {semantic.disallowed_findings.map((entry) => (
+                  <li key={`disallow-${entry.clause}`}>
+                    <span
+                      className={`validation-pill validation-pill-${entry.triggered ? "failed" : "ok"}`}
+                    >
+                      {entry.triggered ? text.validationTriggered : text.validationOk}
+                    </span>{" "}
+                    {entry.clause}
+                    {entry.matched_tokens.length ? (
+                      <span className="muted"> · {entry.matched_tokens.join(", ")}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+          {semantic && semantic.list_size_findings.length ? (
+            <details className="validation-details">
+              <summary>{text.validationListSize}</summary>
+              <ul>
+                {semantic.list_size_findings.map((entry) => (
+                  <li key={`list-${entry.key}`}>
+                    {entry.key}: {entry.count}/{entry.minimum}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function summarizeAuthors(authors: string[]) {
@@ -1728,6 +1993,13 @@ export default function App() {
                     <pre className="json-surface">{prettyJson(selectedStage?.artifact_json)}</pre>
                   )}
                 </div>
+                <ValidationReportPanel
+                  text={text}
+                  report={
+                    (selectedStage?.metadata_json as { validation?: ValidationReport } | undefined)
+                      ?.validation
+                  }
+                />
               </div>
             </section>
 
