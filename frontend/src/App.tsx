@@ -5,6 +5,7 @@ import {
   api,
   type GroundedPaperResult,
   type LiteratureResult,
+  type CitationGraph,
   type Paper,
   type PaperMetadataPayload,
   type Plan,
@@ -383,6 +384,16 @@ const uiCopy = {
     sandboxTimeoutPlaceholder: "300",
     sandboxMaxAttempts: "Max sandbox attempts",
     sandboxMaxAttemptsPlaceholder: "1",
+    citationGraph: "Citation Graph",
+    citationGraphRefresh: "Refresh",
+    citationGraphPapers: "Papers",
+    citationGraphInternal: "Internal links",
+    citationGraphExternal: "External references",
+    citationGraphUnresolved: "Unresolved",
+    citationGraphEmpty: "No citation links extracted yet — add or refresh papers with extracted text or DOIs.",
+    citationGraphReferences: "References",
+    citationGraphCitedBy: "Cited by",
+    citationGraphError: "Failed to load citation graph:",
   },
   cn: {
     ready: "已就绪。",
@@ -644,6 +655,16 @@ const uiCopy = {
     sandboxTimeoutPlaceholder: "300",
     sandboxMaxAttempts: "沙箱最大尝试次数",
     sandboxMaxAttemptsPlaceholder: "1",
+    citationGraph: "引用图",
+    citationGraphRefresh: "刷新",
+    citationGraphPapers: "论文",
+    citationGraphInternal: "内部链接",
+    citationGraphExternal: "外部引用",
+    citationGraphUnresolved: "未解析",
+    citationGraphEmpty: "暂未提取出引用关系 — 可补充 DOI 或重新解析论文文本。",
+    citationGraphReferences: "引用",
+    citationGraphCitedBy: "被引用",
+    citationGraphError: "无法加载引用图：",
   },
 } satisfies Record<
   LocaleMode,
@@ -864,6 +885,110 @@ type NotificationsCopy = {
   notificationsClear: string;
   notificationsEmpty: string;
 };
+
+type CitationGraphCopy = {
+  citationGraph: string;
+  citationGraphRefresh: string;
+  citationGraphPapers: string;
+  citationGraphInternal: string;
+  citationGraphExternal: string;
+  citationGraphUnresolved: string;
+  citationGraphEmpty: string;
+  citationGraphReferences: string;
+  citationGraphCitedBy: string;
+};
+
+function CitationGraphPanel({
+  graph,
+  text,
+  onRefresh,
+}: {
+  graph: CitationGraph | null;
+  text: CitationGraphCopy;
+  onRefresh: () => void;
+}) {
+  const summary = graph?.summary;
+  const papers = graph?.nodes.filter((node) => node.kind === "paper") ?? [];
+  const edgesByPaper = (() => {
+    const map = new Map<string, { outgoing: typeof graph.edges; incoming: typeof graph.edges }>();
+    for (const node of papers) {
+      map.set(node.id, { outgoing: [], incoming: [] });
+    }
+    if (!graph) {
+      return map;
+    }
+    for (const edge of graph.edges) {
+      const out = map.get(edge.source);
+      if (out) {
+        out.outgoing.push(edge);
+      }
+      const inc = map.get(edge.target);
+      if (inc) {
+        inc.incoming.push(edge);
+      }
+    }
+    return map;
+  })();
+  return (
+    <div className="citation-panel">
+      <div className="citation-panel-head">
+        <h3>{text.citationGraph}</h3>
+        <button type="button" className="secondary" onClick={onRefresh}>
+          {text.citationGraphRefresh}
+        </button>
+      </div>
+      {!graph || papers.length === 0 ? (
+        <p className="muted">{text.citationGraphEmpty}</p>
+      ) : (
+        <>
+          <div className="citation-summary">
+            <span>
+              {text.citationGraphPapers}: {summary?.papers ?? 0}
+            </span>
+            <span>
+              {text.citationGraphInternal}: {summary?.internal_links ?? 0}
+            </span>
+            <span>
+              {text.citationGraphExternal}: {summary?.external_references ?? 0}
+            </span>
+            <span>
+              {text.citationGraphUnresolved}: {summary?.unresolved_links ?? 0}
+            </span>
+          </div>
+          <ul className="citation-list">
+            {papers.map((paper) => {
+              const buckets = edgesByPaper.get(paper.id);
+              return (
+                <li key={paper.id}>
+                  <strong>{paper.label}</strong>
+                  <span className="muted">{paper.citation_key || paper.doi || ""}</span>
+                  <div className="citation-edges">
+                    <span>
+                      {text.citationGraphReferences}:{" "}
+                      {(buckets?.outgoing ?? []).length === 0
+                        ? "—"
+                        : (buckets?.outgoing ?? [])
+                            .map((edge) => edge.target.replace("paper:", "").replace("external:", ""))
+                            .join(", ")}
+                    </span>
+                    <span>
+                      {text.citationGraphCitedBy}:{" "}
+                      {(buckets?.incoming ?? []).length === 0
+                        ? "—"
+                        : (buckets?.incoming ?? [])
+                            .map((edge) => edge.source.replace("paper:", ""))
+                            .join(", ")}
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
 
 function NotificationsTray({
   notifications,
@@ -1708,6 +1833,7 @@ export default function App() {
   const [projectDetail, setProjectDetail] = useState<ProjectDetail | null>(null);
   const [projectSearch, setProjectSearch] = useState("");
   const [projectIncludeArchived, setProjectIncludeArchived] = useState(true);
+  const [citationGraph, setCitationGraph] = useState<CitationGraph | null>(null);
   const [notifications, setNotifications] = useState<NotificationEntry[]>([]);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">(
     typeof Notification === "undefined" ? "unsupported" : Notification.permission,
@@ -1797,6 +1923,19 @@ export default function App() {
     setProjects(response.projects);
   }
 
+  async function refreshCitationGraph(projectId: string | null) {
+    if (!projectId) {
+      setCitationGraph(null);
+      return;
+    }
+    try {
+      const response = await api.getCitationGraph(projectId);
+      setCitationGraph(response);
+    } catch (error) {
+      setStatusMessage(`${text.citationGraphError} ${(error as Error).message ?? ""}`);
+    }
+  }
+
   const filteredProjects = useMemo(() => {
     const term = projectSearch.trim().toLowerCase();
     return projects
@@ -1856,6 +1995,7 @@ export default function App() {
     setGroundedResults([]);
     setGroundedStrategy("");
     setRun(detail.latest_run);
+    void refreshCitationGraph(projectId);
     setSelectedStageIndex(detail.latest_run?.current_stage_index || 1);
     if (detail.latest_run) {
       const runDetail = await api.getRun(detail.latest_run.id);
@@ -3269,6 +3409,11 @@ export default function App() {
                   </div>
                 ))}
               </div>
+              <CitationGraphPanel
+                graph={citationGraph}
+                onRefresh={() => void refreshCitationGraph(selectedProjectId || null)}
+                text={text}
+              />
             </section>
           </section>
         </main>

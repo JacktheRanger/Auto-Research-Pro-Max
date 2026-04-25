@@ -32,6 +32,7 @@ from .db import (
     set_project_archived,
     update_project_execution_config,
 )
+from .services.citation_graph import build_citation_graph
 from .services.events import event_hub
 from .services.grounding import retrieve_grounded_snippets
 from .services.llm import generate_plan_markdown, test_connection
@@ -310,6 +311,15 @@ async def papers_url(project_id: str, payload: RemotePaperPayload) -> dict[str, 
         raise HTTPException(status_code=404, detail="Project not found")
     paper = await save_remote_paper(project_id, payload.url, payload.title, payload.notes, get_settings())
     return {"paper": paper, "papers": list_papers(project_id)}
+
+
+@app.get("/api/projects/{project_id}/citation-graph")
+async def projects_citation_graph(project_id: str) -> dict[str, Any]:
+    project = get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    papers = list_papers(project_id)
+    return build_citation_graph(papers)
 
 
 @app.post("/api/projects/{project_id}/papers/retrieve")
