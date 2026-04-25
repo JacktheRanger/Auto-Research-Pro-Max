@@ -12,8 +12,8 @@ from .grounding import retrieve_paper_context_text
 # Values are best-effort defaults so the local UI can show a rough estimate
 # even when the provider response does not surface a price field.
 COST_TABLE: dict[str, dict[str, float]] = {
-    "gpt-5.4": {"input": 10.0, "output": 30.0},
-    "gpt-5.4-mini": {"input": 1.5, "output": 4.5},
+    "gpt-5.5": {"input": 10.0, "output": 30.0},
+    "gpt-5.5-mini": {"input": 1.5, "output": 4.5},
     "gpt-5": {"input": 5.0, "output": 15.0},
     "gpt-4.1": {"input": 5.0, "output": 15.0},
     "gpt-4.1-mini": {"input": 1.5, "output": 4.5},
@@ -407,7 +407,7 @@ def generate_plan_markdown(
         f"Stage catalog:\n{stage_catalog}\n\n"
         f"Project context:\n{context}"
     )
-    chosen_model = settings.get("research_model") or "gpt-5.4"
+    chosen_model = settings.get("research_model") or "gpt-5.5"
     response = client.responses.create(
         model=chosen_model,
         input=prompt,
@@ -477,7 +477,7 @@ def generate_stage_result(
         f"Approved plan:\n{plan_markdown}\n\n"
         f"Previous stage outputs:\n{prior_text or 'None yet.'}\n"
     )
-    chosen_model = model or "gpt-5.4"
+    chosen_model = model or "gpt-5.5"
     response = client.responses.create(
         model=chosen_model,
         input=prompt,
@@ -495,7 +495,7 @@ def test_connection(settings: dict[str, Any]) -> dict[str, Any]:
     if client is None:
         return {"ok": False, "message": "Missing API key."}
     response = client.responses.create(
-        model=settings.get("research_model") or "gpt-5.4",
+        model=settings.get("research_model") or "gpt-5.5",
         input="Reply with the single word: ready",
     )
     return {"ok": True, "message": response.output_text.strip() or "ready"}

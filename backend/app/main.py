@@ -57,8 +57,8 @@ from .templates import list_project_templates
 class SettingsPayload(BaseModel):
     api_key: str = ""
     base_url: str = "https://api.openai.com/v1"
-    research_model: str = "gpt-5.4"
-    code_model: str = "gpt-5.4"
+    research_model: str = "gpt-5.5"
+    code_model: str = "gpt-5.5"
     embedding_model: str = ""
     notes: str = ""
 
