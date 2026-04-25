@@ -10,6 +10,7 @@ import {
   type Project,
   type ProjectExecutionPayload,
   type Run,
+  type RunAuditEvent,
   type RunStage,
   type RuntimeInfo,
   type Settings,
@@ -252,6 +253,19 @@ const uiCopy = {
     chunkCount: "Chunks",
     openPdf: "Open PDF",
     preview: "Preview",
+    approvalAudit: "Approval Audit Trail",
+    approvalAuditEmpty: "No pause, reject, or rollback decisions recorded yet.",
+    auditAction: "Action",
+    auditStage: "Stage",
+    auditDecidedBy: "Decided by",
+    auditComment: "Comment",
+    auditTime: "Time",
+    auditDecidedByMissing: "(unspecified)",
+    auditCommentMissing: "(no comment)",
+    commentPrompt: (action: string) =>
+      `Optional comment for "${action}" (leave blank to record without notes):`,
+    decidedByPrompt: "Optional decider name or handle (leave blank to skip):",
+    gateDecisionLabel: "Gate decision",
   },
   cn: {
     ready: "已就绪。",
@@ -395,8 +409,24 @@ const uiCopy = {
     chunkCount: "分块数",
     openPdf: "打开 PDF",
     preview: "预览",
+    approvalAudit: "审批审计记录",
+    approvalAuditEmpty: "尚未记录任何暂停、拒绝或回滚决策。",
+    auditAction: "动作",
+    auditStage: "阶段",
+    auditDecidedBy: "决策人",
+    auditComment: "备注",
+    auditTime: "时间",
+    auditDecidedByMissing: "（未填写）",
+    auditCommentMissing: "（无备注）",
+    commentPrompt: (action: string) =>
+      `请输入“${action}”的可选备注（留空表示无备注）:`,
+    decidedByPrompt: "可选填写决策人名称（留空跳过）:",
+    gateDecisionLabel: "门控决策",
   },
-} satisfies Record<LocaleMode, Record<string, string | ((count: number) => string)>>;
+} satisfies Record<
+  LocaleMode,
+  Record<string, string | ((count: number) => string) | ((action: string) => string)>
+>;
 
 const emptySettings: Settings = {
   api_key: "",
@@ -622,6 +652,7 @@ export default function App() {
   const [projectDetail, setProjectDetail] = useState<ProjectDetail | null>(null);
   const [run, setRun] = useState<Run | null>(null);
   const [runStages, setRunStages] = useState<RunStage[]>([]);
+  const [auditEvents, setAuditEvents] = useState<RunAuditEvent[]>([]);
   const [selectedStageIndex, setSelectedStageIndex] = useState(1);
   const [statusMessage, setStatusMessage] = useState(uiCopy.en.ready);
   const [connectionMessage, setConnectionMessage] = useState("");
@@ -680,9 +711,11 @@ export default function App() {
       const runDetail = await api.getRun(detail.latest_run.id);
       setRun(runDetail.run);
       setRunStages(runDetail.stages);
+      setAuditEvents(runDetail.audit_events ?? []);
       setSelectedStageIndex(runDetail.run.current_stage_index || 1);
     } else {
       setRunStages([]);
+      setAuditEvents([]);
       setSelectedStageIndex(1);
     }
     await refreshProjects();
@@ -695,9 +728,16 @@ export default function App() {
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
     const socket = new WebSocket(`${protocol}://${window.location.host}/ws/runs/${run.id}`);
     socket.onmessage = (event) => {
-      const payload = JSON.parse(event.data) as { run: Run; stages: RunStage[] };
+      const payload = JSON.parse(event.data) as {
+        run: Run;
+        stages: RunStage[];
+        audit_events?: RunAuditEvent[];
+      };
       setRun(payload.run);
       setRunStages(payload.stages);
+      if (payload.audit_events) {
+        setAuditEvents(payload.audit_events);
+      }
       setSelectedStageIndex(payload.run.pending_gate_index || payload.run.current_stage_index || 1);
     };
     socket.onopen = () => setConnectionMessage(text.wsConnected);
@@ -894,18 +934,39 @@ export default function App() {
     const result = await api.startRun(selectedProjectId);
     setRun(result.run);
     setRunStages(result.stages);
+    setAuditEvents([]);
     setSelectedStageIndex(1);
     setStatusMessage(text.runStarted);
     await refreshProjects();
+  }
+
+  function promptControlPayload(actionLabel: string): { comment: string; decided_by: string } | null {
+    if (typeof window === "undefined") {
+      return { comment: "", decided_by: "" };
+    }
+    const comment = window.prompt(text.commentPrompt(actionLabel), "") ?? "";
+    if (comment === null) {
+      return null;
+    }
+    let decidedBy = "";
+    if (comment.trim()) {
+      decidedBy = window.prompt(text.decidedByPrompt, "") ?? "";
+    }
+    return { comment: comment.trim(), decided_by: decidedBy.trim() };
   }
 
   async function handlePauseRun() {
     if (!run) {
       return;
     }
-    const result = await api.pauseRun(run.id);
+    const payload = promptControlPayload(text.pauseRun);
+    if (payload === null) {
+      return;
+    }
+    const result = await api.pauseRun(run.id, payload);
     setRun(result.run);
     setRunStages(result.stages);
+    setAuditEvents(result.audit_events ?? []);
     setStatusMessage(text.runPaused);
     await refreshProjects();
   }
@@ -914,9 +975,14 @@ export default function App() {
     if (!run) {
       return;
     }
-    const result = await api.resumeRun(run.id);
+    const payload = promptControlPayload(text.resumeRun);
+    if (payload === null) {
+      return;
+    }
+    const result = await api.resumeRun(run.id, payload);
     setRun(result.run);
     setRunStages(result.stages);
+    setAuditEvents(result.audit_events ?? []);
     setStatusMessage(text.runResumed);
     await refreshProjects();
   }
@@ -925,9 +991,14 @@ export default function App() {
     if (!run) {
       return;
     }
-    const result = await api.rejectRun(run.id);
+    const payload = promptControlPayload(text.rejectGate);
+    if (payload === null) {
+      return;
+    }
+    const result = await api.rejectRun(run.id, payload);
     setRun(result.run);
     setRunStages(result.stages);
+    setAuditEvents(result.audit_events ?? []);
     setStatusMessage(text.gateRejected);
     await refreshProjects();
   }
@@ -936,9 +1007,14 @@ export default function App() {
     if (!run) {
       return;
     }
-    const result = await api.rollbackRun(run.id);
+    const payload = promptControlPayload(text.rollbackGate);
+    if (payload === null) {
+      return;
+    }
+    const result = await api.rollbackRun(run.id, payload);
     setRun(result.run);
     setRunStages(result.stages);
+    setAuditEvents(result.audit_events ?? []);
     setSelectedStageIndex(result.run.current_stage_index || 1);
     setStatusMessage(text.rollbackComplete);
     await refreshProjects();
@@ -1534,6 +1610,38 @@ export default function App() {
                     {text.gateState}: {run.pending_gate_state}
                   </p>
                 ) : null}
+              </div>
+              <div className="audit-panel">
+                <h3>{text.approvalAudit}</h3>
+                {auditEvents.length === 0 ? (
+                  <p className="muted">{text.approvalAuditEmpty}</p>
+                ) : (
+                  <ul className="audit-list">
+                    {auditEvents.map((event) => (
+                      <li key={event.id} className={`audit-row audit-${event.action}`}>
+                        <div className="audit-row-head">
+                          <span className="audit-action-pill">{event.action}</span>
+                          <span className="audit-stage">
+                            {text.auditStage} {event.stage_index || "—"}
+                            {event.stage_key ? ` (${event.stage_key})` : ""}
+                          </span>
+                          <time className="audit-time muted">
+                            {new Date(event.created_at).toLocaleString()}
+                          </time>
+                        </div>
+                        <div className="audit-row-body">
+                          <div className="audit-decided-by">
+                            <span className="metric-label">{text.auditDecidedBy}</span>
+                            <strong>{event.decided_by || text.auditDecidedByMissing}</strong>
+                          </div>
+                          <p className="audit-comment">
+                            {event.comment || text.auditCommentMissing}
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
               <p className="muted">{text.reducedPipelineNote}</p>
             </section>

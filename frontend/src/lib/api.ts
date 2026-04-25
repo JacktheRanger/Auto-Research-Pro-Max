@@ -166,6 +166,27 @@ export type RunStage = {
   rollback_target_index: number;
   error: string;
   metadata_json: Record<string, unknown>;
+  gate_decided_by?: string;
+  gate_comment?: string;
+  gate_decided_at?: string;
+};
+
+export type RunAuditEvent = {
+  id: string;
+  run_id: string;
+  stage_index: number;
+  stage_key: string;
+  gate_key: string;
+  action: string;
+  decided_by: string;
+  comment: string;
+  metadata_json: Record<string, unknown>;
+  created_at: string;
+};
+
+export type RunControlPayload = {
+  comment?: string;
+  decided_by?: string;
 };
 
 export type RuntimeInfo = {
@@ -320,21 +341,42 @@ export const api = {
     request<{ run: Run; stages: RunStage[] }>(`/api/projects/${projectId}/runs/start`, {
       method: "POST",
     }),
-  getRun: (runId: string) => request<{ run: Run; stages: RunStage[] }>(`/api/runs/${runId}`),
-  pauseRun: (runId: string) =>
-    request<{ run: Run; stages: RunStage[] }>(`/api/runs/${runId}/control/pause`, {
-      method: "POST",
-    }),
-  resumeRun: (runId: string) =>
-    request<{ run: Run; stages: RunStage[] }>(`/api/runs/${runId}/control/resume`, {
-      method: "POST",
-    }),
-  rejectRun: (runId: string) =>
-    request<{ run: Run; stages: RunStage[] }>(`/api/runs/${runId}/control/reject`, {
-      method: "POST",
-    }),
-  rollbackRun: (runId: string) =>
-    request<{ run: Run; stages: RunStage[] }>(`/api/runs/${runId}/control/rollback`, {
-      method: "POST",
-    }),
+  getRun: (runId: string) =>
+    request<{ run: Run; stages: RunStage[]; audit_events: RunAuditEvent[] }>(
+      `/api/runs/${runId}`,
+    ),
+  getRunAudit: (runId: string) =>
+    request<{ run_id: string; audit_events: RunAuditEvent[] }>(`/api/runs/${runId}/audit`),
+  pauseRun: (runId: string, payload: RunControlPayload = {}) =>
+    request<{ run: Run; stages: RunStage[]; audit_events: RunAuditEvent[] }>(
+      `/api/runs/${runId}/control/pause`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    ),
+  resumeRun: (runId: string, payload: RunControlPayload = {}) =>
+    request<{ run: Run; stages: RunStage[]; audit_events: RunAuditEvent[] }>(
+      `/api/runs/${runId}/control/resume`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    ),
+  rejectRun: (runId: string, payload: RunControlPayload = {}) =>
+    request<{ run: Run; stages: RunStage[]; audit_events: RunAuditEvent[] }>(
+      `/api/runs/${runId}/control/reject`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    ),
+  rollbackRun: (runId: string, payload: RunControlPayload = {}) =>
+    request<{ run: Run; stages: RunStage[]; audit_events: RunAuditEvent[] }>(
+      `/api/runs/${runId}/control/rollback`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    ),
 };

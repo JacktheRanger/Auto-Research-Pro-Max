@@ -496,6 +496,107 @@ textarea {
   margin: 0.2rem 0;
 }
 
+.audit-panel {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 0.95rem 1.1rem;
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.audit-panel h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.audit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.audit-row {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 0.55rem 0.75rem;
+  background: var(--bg-panel);
+  display: grid;
+  gap: 0.35rem;
+}
+
+.audit-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.audit-action-pill {
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  background: var(--secondary-bg);
+  color: var(--secondary-text);
+}
+
+.audit-pause .audit-action-pill {
+  background: rgba(199, 155, 43, 0.18);
+  color: var(--warning);
+}
+
+.audit-reject .audit-action-pill {
+  background: rgba(214, 95, 86, 0.18);
+  color: var(--danger);
+}
+
+.audit-approve .audit-action-pill,
+.audit-resume .audit-action-pill {
+  background: rgba(30, 143, 122, 0.18);
+  color: var(--mint);
+}
+
+.audit-rollback .audit-action-pill {
+  background: rgba(217, 130, 59, 0.2);
+  color: var(--accent-strong);
+}
+
+.audit-stage {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.audit-time {
+  margin-left: auto;
+  font-size: 0.75rem;
+}
+
+.audit-row-body {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.audit-decided-by {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+  font-size: 0.85rem;
+}
+
+.audit-comment {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
 .json-surface {
   background: rgba(7, 21, 26, 0.06);
   border: 1px solid var(--line);
