@@ -359,6 +359,13 @@ export const api = {
         method: "POST",
       },
     ),
+  runPaperOcr: (projectId: string, paperId: string) =>
+    request<{ paper: Paper; papers: Paper[] }>(
+      `/api/projects/${projectId}/papers/${paperId}/ocr`,
+      {
+        method: "POST",
+      },
+    ),
   deletePaper: (projectId: string, paperId: string) =>
     request<{ deleted: boolean; papers: Paper[] }>(
       `/api/projects/${projectId}/papers/${paperId}`,

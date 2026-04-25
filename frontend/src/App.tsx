@@ -312,6 +312,11 @@ const uiCopy = {
     paperRefreshNoData: "No additional metadata returned by providers.",
     paperLastEdited: "Last edits",
     paperLastRefresh: "Last refresh",
+    paperRunOcr: "Run OCR",
+    paperOcrSuccess: "OCR recovered text from the PDF.",
+    paperOcrSkipped: "OCR could not recover text — see metadata for missing dependencies.",
+    paperOcrUnavailable: "OCR is unavailable: install the optional pytesseract + tesseract dependencies.",
+    paperOcrSummary: "OCR",
   },
   cn: {
     ready: "已就绪。",
@@ -513,6 +518,11 @@ const uiCopy = {
     paperRefreshNoData: "Provider 没有返回新的元数据。",
     paperLastEdited: "最近一次编辑",
     paperLastRefresh: "最近一次刷新",
+    paperRunOcr: "执行 OCR",
+    paperOcrSuccess: "OCR 已从 PDF 中恢复文本。",
+    paperOcrSkipped: "OCR 未能恢复文本 — 详情见 metadata 中的依赖。",
+    paperOcrUnavailable: "OCR 不可用：请安装可选的 pytesseract 与 tesseract 依赖。",
+    paperOcrSummary: "OCR 状态",
   },
 } satisfies Record<
   LocaleMode,
@@ -682,6 +692,8 @@ type PaperCardCopy = {
   paperEditCitationKey: string;
   paperLastEdited: string;
   paperLastRefresh: string;
+  paperRunOcr: string;
+  paperOcrSummary: string;
 };
 
 function PaperCard({
@@ -690,12 +702,14 @@ function PaperCard({
   onUpdate,
   onRefresh,
   onDelete,
+  onRunOcr,
 }: {
   paper: Paper;
   text: PaperCardCopy;
   onUpdate: (payload: PaperMetadataPayload) => Promise<void>;
   onRefresh: () => Promise<void>;
   onDelete: () => Promise<void>;
+  onRunOcr: () => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -747,14 +761,33 @@ function PaperCard({
     }
   }
 
+  async function triggerOcr() {
+    setBusy(true);
+    try {
+      await onRunOcr();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const metadataInfo = paper.metadata_json as
     | {
         manual_edits?: Array<{ fields?: string[]; actor?: string }>;
         provider_refreshes?: Array<{ providers?: string[]; errors?: Record<string, string> }>;
+        ocr?: {
+          status?: string;
+          engine?: string;
+          pages_processed?: number;
+          languages?: string;
+          missing_dependencies?: string[];
+          recovered_chars?: number;
+          triggered_reason?: string;
+        };
       }
     | undefined;
   const lastEdit = metadataInfo?.manual_edits?.[metadataInfo.manual_edits.length - 1];
   const lastRefresh = metadataInfo?.provider_refreshes?.[metadataInfo.provider_refreshes.length - 1];
+  const ocrInfo = metadataInfo?.ocr;
 
   return (
     <article className="paper-card">
@@ -803,6 +836,15 @@ function PaperCard({
               {text.paperLastRefresh}: {lastRefresh.providers.join(", ")}
             </p>
           ) : null}
+          {ocrInfo?.status ? (
+            <p className="muted paper-card-meta-line">
+              {text.paperOcrSummary}: {ocrInfo.status}
+              {ocrInfo.recovered_chars ? ` · ${ocrInfo.recovered_chars} chars` : ""}
+              {ocrInfo.missing_dependencies?.length
+                ? ` · missing: ${ocrInfo.missing_dependencies.join(", ")}`
+                : ""}
+            </p>
+          ) : null}
           <div className="paper-card-actions">
             <button type="button" className="secondary" onClick={startEdit} disabled={busy}>
               {text.paperEdit}
@@ -810,6 +852,11 @@ function PaperCard({
             <button type="button" className="secondary" onClick={triggerRefresh} disabled={busy}>
               {text.paperRefresh}
             </button>
+            {paper.stored_file_url ? (
+              <button type="button" className="secondary" onClick={triggerOcr} disabled={busy}>
+                {text.paperRunOcr}
+              </button>
+            ) : null}
             <button type="button" className="secondary danger" onClick={triggerDelete} disabled={busy}>
               {text.paperDelete}
             </button>
@@ -1507,6 +1554,29 @@ export default function App() {
     setStatusMessage(text.paperDeletedMessage);
   }
 
+  async function handleRunPaperOcr(paperId: string) {
+    if (!selectedProjectId) {
+      return;
+    }
+    try {
+      const response = await api.runPaperOcr(selectedProjectId, paperId);
+      setProjectDetail((current) =>
+        current ? { ...current, papers: response.papers } : current,
+      );
+      const ocr = (response.paper.metadata_json as { ocr?: { status?: string; recovered_chars?: number } })?.ocr;
+      const status = ocr?.status ?? "";
+      if (status === "ok" && (ocr?.recovered_chars ?? 0) > 0) {
+        setStatusMessage(text.paperOcrSuccess);
+      } else if (status.startsWith("no_")) {
+        setStatusMessage(text.paperOcrUnavailable);
+      } else {
+        setStatusMessage(text.paperOcrSkipped);
+      }
+    } catch (error) {
+      setStatusMessage(`${text.paperEditError} ${(error as Error).message ?? ""}`);
+    }
+  }
+
   async function handleImportLiterature(result: LiteratureResult) {
     if (!selectedProjectId) {
       return;
@@ -2048,6 +2118,7 @@ export default function App() {
                     onUpdate={(updates) => handleUpdatePaperMetadata(paper.id, updates)}
                     onRefresh={() => handleRefreshPaperMetadata(paper.id)}
                     onDelete={() => handleDeletePaper(paper.id)}
+                    onRunOcr={() => handleRunPaperOcr(paper.id)}
                   />
                 ))}
               </div>
