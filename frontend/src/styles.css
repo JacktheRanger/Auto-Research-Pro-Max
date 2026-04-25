@@ -695,6 +695,51 @@ textarea {
   line-height: 1.35;
 }
 
+.paper-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.paper-card-actions button.danger {
+  border-color: rgba(214, 95, 86, 0.4);
+  color: var(--danger);
+}
+
+.paper-card-meta-line {
+  font-size: 0.78rem;
+  margin: 0.15rem 0;
+}
+
+.paper-edit-form {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.4rem;
+}
+
+.paper-edit-form label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.paper-edit-form input,
+.paper-edit-form textarea {
+  font: inherit;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--input-bg);
+  color: var(--text);
+}
+
+.paper-edit-form .split-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
 .json-surface {
   background: rgba(7, 21, 26, 0.06);
   border: 1px solid var(--line);

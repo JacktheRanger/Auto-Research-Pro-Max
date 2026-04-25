@@ -668,6 +668,13 @@ def paper_exists_with_citation_key(project_id: str, citation_key: str, exclude_p
     return row is not None
 
 
+def delete_paper(paper_id: str) -> bool:
+    with _LOCK, _connect() as conn:
+        cursor = conn.execute("DELETE FROM papers WHERE id = ?", (paper_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+
+
 def replace_paper_chunks(paper_id: str, project_id: str, chunks: list[dict[str, Any]]) -> None:
     now = utc_now()
     with _LOCK, _connect() as conn:

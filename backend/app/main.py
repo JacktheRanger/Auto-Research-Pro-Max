@@ -12,7 +12,9 @@ from pydantic import BaseModel, Field
 from .db import (
     DATA_DIR,
     approve_plan,
+    delete_paper,
     get_latest_run,
+    get_paper,
     get_plan,
     get_project,
     get_run,
@@ -30,7 +32,13 @@ from .db import (
 from .services.events import event_hub
 from .services.grounding import retrieve_grounded_snippets
 from .services.llm import generate_plan_markdown, test_connection
-from .services.papers import save_literature_result, save_remote_paper, save_uploaded_paper
+from .services.papers import (
+    refresh_paper_metadata,
+    save_literature_result,
+    save_remote_paper,
+    save_uploaded_paper,
+    update_paper_metadata,
+)
 from .services.retrieval import search_literature
 from .services.runner import pause_run, reject_run, resume_run, rollback_run, start_run
 from .stages import STAGE_COUNT, stage_catalog
@@ -108,6 +116,21 @@ class GroundedSearchPayload(BaseModel):
 class RunControlPayload(BaseModel):
     comment: str = ""
     decided_by: str = ""
+
+
+class PaperMetadataPayload(BaseModel):
+    title: str | None = None
+    url: str | None = None
+    notes: str | None = None
+    abstract: str | None = None
+    doi: str | None = None
+    venue: str | None = None
+    year: int | None = None
+    authors_json: list[str] | str | None = None
+    citation_key: str | None = None
+    source_provider: str | None = None
+    external_id: str | None = None
+    actor: str = ""
 
 
 app = FastAPI(title="Auto Research Pro Max", version="0.2.0")
@@ -241,6 +264,53 @@ async def literature_search(project_id: str, payload: LiteratureSearchPayload) -
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return search_literature(payload.query, limit_per_provider=payload.limit_per_provider)
+
+
+@app.put("/api/projects/{project_id}/papers/{paper_id}")
+async def papers_update_metadata(
+    project_id: str,
+    paper_id: str,
+    payload: PaperMetadataPayload,
+) -> dict[str, Any]:
+    project = get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    paper = get_paper(paper_id)
+    if paper is None or paper.get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="Paper not found in project")
+    body = payload.model_dump(exclude_unset=True, exclude_none=True)
+    try:
+        updated = update_paper_metadata(project_id, paper_id, body, get_settings())
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"paper": updated, "papers": list_papers(project_id)}
+
+
+@app.post("/api/projects/{project_id}/papers/{paper_id}/refresh")
+async def papers_refresh_metadata(project_id: str, paper_id: str) -> dict[str, Any]:
+    project = get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    paper = get_paper(paper_id)
+    if paper is None or paper.get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="Paper not found in project")
+    try:
+        refreshed = await refresh_paper_metadata(project_id, paper_id, get_settings())
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"paper": refreshed, "papers": list_papers(project_id)}
+
+
+@app.delete("/api/projects/{project_id}/papers/{paper_id}")
+async def papers_delete(project_id: str, paper_id: str) -> dict[str, Any]:
+    project = get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    paper = get_paper(paper_id)
+    if paper is None or paper.get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="Paper not found in project")
+    deleted = delete_paper(paper_id)
+    return {"deleted": deleted, "papers": list_papers(project_id)}
 
 
 @app.post("/api/projects/{project_id}/papers/import")

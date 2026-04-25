@@ -6,6 +6,7 @@ import {
   type GroundedPaperResult,
   type LiteratureResult,
   type Paper,
+  type PaperMetadataPayload,
   type Plan,
   type Project,
   type ProjectExecutionPayload,
@@ -288,6 +289,29 @@ const uiCopy = {
     validationNoData: "No validation report yet — run this stage first.",
     validationToggleShow: "Show validation",
     validationToggleHide: "Hide validation",
+    paperEdit: "Edit metadata",
+    paperEditCancel: "Cancel",
+    paperEditSave: "Save",
+    paperRefresh: "Refresh from providers",
+    paperDelete: "Remove",
+    paperDeleteConfirm: "Remove this paper from the project? This also drops its chunks.",
+    paperEditTitle: "Title",
+    paperEditAuthors: "Authors",
+    paperEditAuthorsHint: "One per line, or separated by ;",
+    paperEditYear: "Year",
+    paperEditVenue: "Venue",
+    paperEditDoi: "DOI",
+    paperEditUrl: "URL",
+    paperEditAbstract: "Abstract",
+    paperEditNotes: "Notes",
+    paperEditCitationKey: "Citation key",
+    paperUpdateSaved: "Paper metadata updated.",
+    paperRefreshSaved: "Paper metadata refreshed.",
+    paperDeletedMessage: "Paper removed.",
+    paperEditError: "Could not save metadata.",
+    paperRefreshNoData: "No additional metadata returned by providers.",
+    paperLastEdited: "Last edits",
+    paperLastRefresh: "Last refresh",
   },
   cn: {
     ready: "已就绪。",
@@ -466,6 +490,29 @@ const uiCopy = {
     validationNoData: "还没有校验报告 — 运行该阶段后会出现。",
     validationToggleShow: "展开校验",
     validationToggleHide: "收起校验",
+    paperEdit: "编辑元数据",
+    paperEditCancel: "取消",
+    paperEditSave: "保存",
+    paperRefresh: "从 Provider 刷新",
+    paperDelete: "删除",
+    paperDeleteConfirm: "确认从项目中移除这篇论文？相关分块也会被清理。",
+    paperEditTitle: "标题",
+    paperEditAuthors: "作者",
+    paperEditAuthorsHint: "每行一位，或用 ; 分隔",
+    paperEditYear: "年份",
+    paperEditVenue: "Venue",
+    paperEditDoi: "DOI",
+    paperEditUrl: "URL",
+    paperEditAbstract: "摘要",
+    paperEditNotes: "备注",
+    paperEditCitationKey: "Citation key",
+    paperUpdateSaved: "论文元数据已更新。",
+    paperRefreshSaved: "已从 Provider 刷新元数据。",
+    paperDeletedMessage: "论文已移除。",
+    paperEditError: "保存元数据失败。",
+    paperRefreshNoData: "Provider 没有返回新的元数据。",
+    paperLastEdited: "最近一次编辑",
+    paperLastRefresh: "最近一次刷新",
   },
 } satisfies Record<
   LocaleMode,
@@ -611,6 +658,266 @@ type ValidationCopy = {
   validationToggleShow: string;
   validationToggleHide: string;
 };
+
+type PaperCardCopy = {
+  preview: string;
+  doiLabel: string;
+  chunkCount: string;
+  openPdf: string;
+  paperEdit: string;
+  paperEditCancel: string;
+  paperEditSave: string;
+  paperRefresh: string;
+  paperDelete: string;
+  paperDeleteConfirm: string;
+  paperEditTitle: string;
+  paperEditAuthors: string;
+  paperEditAuthorsHint: string;
+  paperEditYear: string;
+  paperEditVenue: string;
+  paperEditDoi: string;
+  paperEditUrl: string;
+  paperEditAbstract: string;
+  paperEditNotes: string;
+  paperEditCitationKey: string;
+  paperLastEdited: string;
+  paperLastRefresh: string;
+};
+
+function PaperCard({
+  paper,
+  text,
+  onUpdate,
+  onRefresh,
+  onDelete,
+}: {
+  paper: Paper;
+  text: PaperCardCopy;
+  onUpdate: (payload: PaperMetadataPayload) => Promise<void>;
+  onRefresh: () => Promise<void>;
+  onDelete: () => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState<PaperMetadataPayload>({});
+
+  function startEdit() {
+    setDraft({
+      title: paper.title,
+      authors_json: paper.authors_json.join("\n"),
+      year: paper.year || undefined,
+      venue: paper.venue,
+      doi: paper.doi,
+      url: paper.url,
+      abstract: paper.abstract,
+      notes: paper.notes,
+      citation_key: paper.citation_key,
+    });
+    setEditing(true);
+  }
+
+  async function submitEdit() {
+    setBusy(true);
+    try {
+      await onUpdate(draft);
+      setEditing(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function triggerRefresh() {
+    setBusy(true);
+    try {
+      await onRefresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function triggerDelete() {
+    if (typeof window !== "undefined" && !window.confirm(text.paperDeleteConfirm)) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await onDelete();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const metadataInfo = paper.metadata_json as
+    | {
+        manual_edits?: Array<{ fields?: string[]; actor?: string }>;
+        provider_refreshes?: Array<{ providers?: string[]; errors?: Record<string, string> }>;
+      }
+    | undefined;
+  const lastEdit = metadataInfo?.manual_edits?.[metadataInfo.manual_edits.length - 1];
+  const lastRefresh = metadataInfo?.provider_refreshes?.[metadataInfo.provider_refreshes.length - 1];
+
+  return (
+    <article className="paper-card">
+      {paper.preview_thumbnail_url ? (
+        <a href={paper.preview_image_url || paper.preview_thumbnail_url} rel="noreferrer" target="_blank">
+          <img
+            alt={`${paper.title} ${text.preview}`}
+            className="paper-thumb"
+            loading="lazy"
+            src={paper.preview_thumbnail_url}
+          />
+        </a>
+      ) : null}
+      {!editing ? (
+        <>
+          <strong>{paper.title}</strong>
+          <span>{paperSummaryLine(paper)}</span>
+          {paper.authors_json.length ? <p>{summarizeAuthors(paper.authors_json)}</p> : null}
+          {paper.doi ? (
+            <p>
+              {text.doiLabel}: {paper.doi}
+            </p>
+          ) : null}
+          <p>
+            {text.chunkCount}: {paper.chunk_count} · {paper.retrieval_ready ? "ready" : "pending"}
+          </p>
+          {paper.url ? (
+            <a href={paper.url} rel="noreferrer" target="_blank">
+              {paper.url}
+            </a>
+          ) : null}
+          {paper.stored_file_url ? (
+            <a href={paper.stored_file_url} rel="noreferrer" target="_blank">
+              {text.openPdf}
+            </a>
+          ) : null}
+          {paper.notes ? <p>{paper.notes}</p> : null}
+          {lastEdit?.fields?.length ? (
+            <p className="muted paper-card-meta-line">
+              {text.paperLastEdited}: {lastEdit.fields.join(", ")}
+              {lastEdit.actor ? ` · ${lastEdit.actor}` : ""}
+            </p>
+          ) : null}
+          {lastRefresh?.providers?.length ? (
+            <p className="muted paper-card-meta-line">
+              {text.paperLastRefresh}: {lastRefresh.providers.join(", ")}
+            </p>
+          ) : null}
+          <div className="paper-card-actions">
+            <button type="button" className="secondary" onClick={startEdit} disabled={busy}>
+              {text.paperEdit}
+            </button>
+            <button type="button" className="secondary" onClick={triggerRefresh} disabled={busy}>
+              {text.paperRefresh}
+            </button>
+            <button type="button" className="secondary danger" onClick={triggerDelete} disabled={busy}>
+              {text.paperDelete}
+            </button>
+          </div>
+        </>
+      ) : (
+        <form
+          className="paper-edit-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submitEdit();
+          }}
+        >
+          <label>
+            {text.paperEditTitle}
+            <input
+              value={draft.title ?? ""}
+              onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+            />
+          </label>
+          <label>
+            {text.paperEditAuthors}
+            <textarea
+              rows={3}
+              value={typeof draft.authors_json === "string" ? draft.authors_json : (draft.authors_json ?? []).join("\n")}
+              onChange={(event) => setDraft({ ...draft, authors_json: event.target.value })}
+              placeholder={text.paperEditAuthorsHint}
+            />
+          </label>
+          <div className="split-fields">
+            <label>
+              {text.paperEditYear}
+              <input
+                type="number"
+                value={draft.year ?? ""}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    year: event.target.value ? Number(event.target.value) : undefined,
+                  })
+                }
+              />
+            </label>
+            <label>
+              {text.paperEditVenue}
+              <input
+                value={draft.venue ?? ""}
+                onChange={(event) => setDraft({ ...draft, venue: event.target.value })}
+              />
+            </label>
+          </div>
+          <div className="split-fields">
+            <label>
+              {text.paperEditDoi}
+              <input
+                value={draft.doi ?? ""}
+                onChange={(event) => setDraft({ ...draft, doi: event.target.value })}
+              />
+            </label>
+            <label>
+              {text.paperEditCitationKey}
+              <input
+                value={draft.citation_key ?? ""}
+                onChange={(event) => setDraft({ ...draft, citation_key: event.target.value })}
+              />
+            </label>
+          </div>
+          <label>
+            {text.paperEditUrl}
+            <input
+              value={draft.url ?? ""}
+              onChange={(event) => setDraft({ ...draft, url: event.target.value })}
+            />
+          </label>
+          <label>
+            {text.paperEditAbstract}
+            <textarea
+              rows={4}
+              value={draft.abstract ?? ""}
+              onChange={(event) => setDraft({ ...draft, abstract: event.target.value })}
+            />
+          </label>
+          <label>
+            {text.paperEditNotes}
+            <textarea
+              rows={2}
+              value={draft.notes ?? ""}
+              onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
+            />
+          </label>
+          <div className="paper-card-actions">
+            <button type="submit" disabled={busy}>
+              {text.paperEditSave}
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => setEditing(false)}
+              disabled={busy}
+            >
+              {text.paperEditCancel}
+            </button>
+          </div>
+        </form>
+      )}
+    </article>
+  );
+}
 
 function ValidationReportPanel({
   report,
@@ -1152,6 +1459,54 @@ export default function App() {
     setGroundedStrategy(response.strategy);
   }
 
+  async function handleUpdatePaperMetadata(paperId: string, payload: PaperMetadataPayload) {
+    if (!selectedProjectId) {
+      return;
+    }
+    try {
+      const response = await api.updatePaperMetadata(selectedProjectId, paperId, payload);
+      setProjectDetail((current) =>
+        current ? { ...current, papers: response.papers } : current,
+      );
+      setStatusMessage(text.paperUpdateSaved);
+    } catch (error) {
+      setStatusMessage(`${text.paperEditError} ${(error as Error).message ?? ""}`);
+    }
+  }
+
+  async function handleRefreshPaperMetadata(paperId: string) {
+    if (!selectedProjectId) {
+      return;
+    }
+    try {
+      const response = await api.refreshPaperMetadata(selectedProjectId, paperId);
+      setProjectDetail((current) =>
+        current ? { ...current, papers: response.papers } : current,
+      );
+      const refreshed = response.paper.metadata_json as
+        | { last_refresh_status?: string }
+        | undefined;
+      setStatusMessage(
+        refreshed?.last_refresh_status === "no_provider_data"
+          ? text.paperRefreshNoData
+          : text.paperRefreshSaved,
+      );
+    } catch (error) {
+      setStatusMessage(`${text.paperEditError} ${(error as Error).message ?? ""}`);
+    }
+  }
+
+  async function handleDeletePaper(paperId: string) {
+    if (!selectedProjectId) {
+      return;
+    }
+    const response = await api.deletePaper(selectedProjectId, paperId);
+    setProjectDetail((current) =>
+      current ? { ...current, papers: response.papers } : current,
+    );
+    setStatusMessage(text.paperDeletedMessage);
+  }
+
   async function handleImportLiterature(result: LiteratureResult) {
     if (!selectedProjectId) {
       return;
@@ -1686,36 +2041,14 @@ export default function App() {
               </div>
               <div className="paper-list">
                 {(projectDetail?.papers ?? []).map((paper) => (
-                  <article key={paper.id} className="paper-card">
-                    {paper.preview_thumbnail_url ? (
-                      <a href={paper.preview_image_url || paper.preview_thumbnail_url} rel="noreferrer" target="_blank">
-                        <img
-                          alt={`${paper.title} ${text.preview}`}
-                          className="paper-thumb"
-                          loading="lazy"
-                          src={paper.preview_thumbnail_url}
-                        />
-                      </a>
-                    ) : null}
-                    <strong>{paper.title}</strong>
-                    <span>{paperSummaryLine(paper)}</span>
-                    {paper.authors_json.length ? <p>{summarizeAuthors(paper.authors_json)}</p> : null}
-                    {paper.doi ? <p>{text.doiLabel}: {paper.doi}</p> : null}
-                    <p>
-                      {text.chunkCount}: {paper.chunk_count} · {paper.retrieval_ready ? "ready" : "pending"}
-                    </p>
-                    {paper.url ? (
-                      <a href={paper.url} rel="noreferrer" target="_blank">
-                        {paper.url}
-                      </a>
-                    ) : null}
-                    {paper.stored_file_url ? (
-                      <a href={paper.stored_file_url} rel="noreferrer" target="_blank">
-                        {text.openPdf}
-                      </a>
-                    ) : null}
-                    {paper.notes ? <p>{paper.notes}</p> : null}
-                  </article>
+                  <PaperCard
+                    key={paper.id}
+                    paper={paper}
+                    text={text}
+                    onUpdate={(updates) => handleUpdatePaperMetadata(paper.id, updates)}
+                    onRefresh={() => handleRefreshPaperMetadata(paper.id)}
+                    onDelete={() => handleDeletePaper(paper.id)}
+                  />
                 ))}
               </div>
             </section>
