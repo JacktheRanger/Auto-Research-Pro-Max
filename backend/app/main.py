@@ -13,6 +13,8 @@ from .db import (
     DATA_DIR,
     approve_plan,
     delete_paper,
+    delete_project,
+    duplicate_project,
     get_latest_run,
     get_paper,
     get_plan,
@@ -27,6 +29,7 @@ from .db import (
     save_settings,
     create_project,
     get_settings,
+    set_project_archived,
     update_project_execution_config,
 )
 from .services.events import event_hub
@@ -201,8 +204,12 @@ async def settings_test(payload: SettingsPayload) -> dict[str, Any]:
 
 
 @app.get("/api/projects")
-async def projects_list() -> dict[str, Any]:
-    return {"projects": list_projects()}
+async def projects_list(
+    search: str = "",
+    include_archived: bool = True,
+) -> dict[str, Any]:
+    projects = list_projects(search=search, include_archived=include_archived)
+    return {"projects": projects, "total": len(projects), "search": search}
 
 
 @app.post("/api/projects")
@@ -233,6 +240,48 @@ async def projects_update_execution_config(project_id: str, payload: ProjectExec
     if updated is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return {"project": updated}
+
+
+class ProjectDuplicatePayload(BaseModel):
+    title: str = ""
+
+
+@app.post("/api/projects/{project_id}/duplicate")
+async def projects_duplicate(project_id: str, payload: ProjectDuplicatePayload | None = None) -> dict[str, Any]:
+    project = get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    duplicated = duplicate_project(project_id, (payload or ProjectDuplicatePayload()).title)
+    if duplicated is None:
+        raise HTTPException(status_code=500, detail="Failed to duplicate project")
+    return {"project": duplicated, "projects": list_projects()}
+
+
+@app.post("/api/projects/{project_id}/archive")
+async def projects_archive(project_id: str) -> dict[str, Any]:
+    project = get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    updated = set_project_archived(project_id, True)
+    return {"project": updated, "projects": list_projects()}
+
+
+@app.post("/api/projects/{project_id}/unarchive")
+async def projects_unarchive(project_id: str) -> dict[str, Any]:
+    project = get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    updated = set_project_archived(project_id, False)
+    return {"project": updated, "projects": list_projects()}
+
+
+@app.delete("/api/projects/{project_id}")
+async def projects_delete(project_id: str) -> dict[str, Any]:
+    project = get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    deleted = delete_project(project_id)
+    return {"deleted": deleted, "projects": list_projects()}
 
 
 @app.post("/api/projects/{project_id}/papers/upload")

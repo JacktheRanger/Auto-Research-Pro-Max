@@ -27,6 +27,8 @@ export type Project = {
   status: string;
   created_at: string;
   updated_at: string;
+  archived_at?: string;
+  duplicated_from?: string;
 };
 
 export type ProjectCreatePayload = {
@@ -321,12 +323,47 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  listProjects: () => request<{ projects: Project[] }>("/api/projects"),
+  listProjects: (params: { search?: string; include_archived?: boolean } = {}) => {
+    const query = new URLSearchParams();
+    if (params.search) {
+      query.set("search", params.search);
+    }
+    if (params.include_archived === false) {
+      query.set("include_archived", "false");
+    }
+    const suffix = query.toString();
+    return request<{ projects: Project[]; total: number; search: string }>(
+      suffix ? `/api/projects?${suffix}` : "/api/projects",
+    );
+  },
   createProject: (payload: ProjectCreatePayload) =>
     request<{ project: Project }>("/api/projects", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  duplicateProject: (projectId: string, title = "") =>
+    request<{ project: Project; projects: Project[] }>(
+      `/api/projects/${projectId}/duplicate`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title }),
+      },
+    ),
+  archiveProject: (projectId: string) =>
+    request<{ project: Project; projects: Project[] }>(
+      `/api/projects/${projectId}/archive`,
+      { method: "POST" },
+    ),
+  unarchiveProject: (projectId: string) =>
+    request<{ project: Project; projects: Project[] }>(
+      `/api/projects/${projectId}/unarchive`,
+      { method: "POST" },
+    ),
+  deleteProject: (projectId: string) =>
+    request<{ deleted: boolean; projects: Project[] }>(
+      `/api/projects/${projectId}`,
+      { method: "DELETE" },
+    ),
   getProject: (projectId: string) =>
     request<{
       project: Project;

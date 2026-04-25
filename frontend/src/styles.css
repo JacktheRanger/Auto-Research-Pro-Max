@@ -896,6 +896,79 @@ textarea {
   background: rgba(30, 143, 122, 0.08);
 }
 
+.project-controls {
+  display: grid;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.project-controls input[type="text"],
+.project-controls input:not([type]) {
+  padding: 0.4rem 0.6rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--input-bg);
+  color: var(--text);
+}
+
+.project-controls .inline-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.project-chip-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 14px;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid transparent;
+}
+
+.project-chip-row.selected {
+  border-color: var(--mint);
+  background: rgba(30, 143, 122, 0.06);
+}
+
+.project-chip-row.archived {
+  opacity: 0.7;
+}
+
+.project-chip-row .project-chip {
+  flex: 1;
+  text-align: left;
+}
+
+.project-chip-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.project-chip-actions button {
+  border: 1px solid var(--line);
+  background: var(--bg-panel);
+  color: var(--text);
+  border-radius: 999px;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.project-chip-actions button.danger {
+  color: var(--danger);
+}
+
+.project-chip-actions button:hover {
+  border-color: var(--accent);
+}
+
 .json-surface {
   background: rgba(7, 21, 26, 0.06);
   border: 1px solid var(--line);

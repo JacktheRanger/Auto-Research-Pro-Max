@@ -268,6 +268,8 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         ("sandbox_setup_command", "TEXT NOT NULL DEFAULT ''"),
         ("sandbox_run_command", "TEXT NOT NULL DEFAULT ''"),
         ("expected_artifacts", "TEXT NOT NULL DEFAULT '[]'"),
+        ("archived_at", "TEXT NOT NULL DEFAULT ''"),
+        ("duplicated_from", "TEXT NOT NULL DEFAULT ''"),
     ):
         _ensure_column(conn, "projects", name, definition)
 
@@ -422,9 +424,28 @@ def create_project(payload: dict[str, str]) -> dict[str, Any]:
     return get_project(project_id)
 
 
-def list_projects() -> list[dict[str, Any]]:
+def list_projects(
+    *,
+    search: str = "",
+    include_archived: bool = True,
+) -> list[dict[str, Any]]:
+    where_clauses: list[str] = []
+    params: list[Any] = []
+    if search:
+        like = f"%{search.strip().lower()}%"
+        where_clauses.append(
+            "(LOWER(title) LIKE ? OR LOWER(idea) LIKE ? OR LOWER(direction) LIKE ?"
+            " OR LOWER(goals) LIKE ? OR LOWER(constraints_text) LIKE ?)"
+        )
+        params.extend([like, like, like, like, like])
+    if not include_archived:
+        where_clauses.append("(archived_at = '' OR archived_at IS NULL)")
+    sql = "SELECT * FROM projects"
+    if where_clauses:
+        sql += " WHERE " + " AND ".join(where_clauses)
+    sql += " ORDER BY (archived_at != '' AND archived_at IS NOT NULL) ASC, created_at DESC"
     with _connect() as conn:
-        rows = conn.execute("SELECT * FROM projects ORDER BY created_at DESC").fetchall()
+        rows = conn.execute(sql, tuple(params)).fetchall()
     return [_to_dict(row) for row in rows if row is not None]
 
 
@@ -472,6 +493,87 @@ def update_project_status(project_id: str, status: str) -> None:
             (status, utc_now(), project_id),
         )
         conn.commit()
+
+
+def set_project_archived(project_id: str, archived: bool) -> dict[str, Any] | None:
+    timestamp = utc_now() if archived else ""
+    with _LOCK, _connect() as conn:
+        conn.execute(
+            "UPDATE projects SET archived_at = ?, updated_at = ? WHERE id = ?",
+            (timestamp, utc_now(), project_id),
+        )
+        conn.commit()
+    return get_project(project_id)
+
+
+def duplicate_project(project_id: str, new_title: str | None = None) -> dict[str, Any] | None:
+    source = get_project(project_id)
+    if source is None:
+        return None
+    new_id = f"proj_{uuid.uuid4().hex[:10]}"
+    now = utc_now()
+    title = (new_title or "").strip() or f"{source['title']} (Copy)"
+    payload = {
+        "id": new_id,
+        "title": title,
+        "idea": source["idea"],
+        "background": source["background"],
+        "direction": source["direction"],
+        "goals": source["goals"],
+        "constraints_text": source["constraints_text"],
+        "compute_budget": source["compute_budget"],
+        "api_budget": source["api_budget"],
+        "repo_path": source.get("repo_path", ""),
+        "repo_url": source.get("repo_url", ""),
+        "repo_ref": source.get("repo_ref", ""),
+        "sandbox_workdir": source.get("sandbox_workdir", ""),
+        "sandbox_setup_command": source.get("sandbox_setup_command", ""),
+        "sandbox_run_command": source.get("sandbox_run_command", ""),
+        "expected_artifacts": _json_dump(source.get("expected_artifacts") or []),
+    }
+    with _LOCK, _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO projects (
+                id, title, idea, background, direction, goals, constraints_text,
+                compute_budget, api_budget, repo_path, repo_url, repo_ref,
+                sandbox_workdir, sandbox_setup_command, sandbox_run_command,
+                expected_artifacts, status, created_at, updated_at, archived_at, duplicated_from
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                payload["id"],
+                payload["title"],
+                payload["idea"],
+                payload["background"],
+                payload["direction"],
+                payload["goals"],
+                payload["constraints_text"],
+                payload["compute_budget"],
+                payload["api_budget"],
+                payload["repo_path"],
+                payload["repo_url"],
+                payload["repo_ref"],
+                payload["sandbox_workdir"],
+                payload["sandbox_setup_command"],
+                payload["sandbox_run_command"],
+                payload["expected_artifacts"],
+                "draft",
+                now,
+                now,
+                "",
+                project_id,
+            ),
+        )
+        conn.commit()
+    return get_project(new_id)
+
+
+def delete_project(project_id: str) -> bool:
+    with _LOCK, _connect() as conn:
+        cursor = conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+        conn.commit()
+        return cursor.rowcount > 0
 
 
 def add_paper_source(payload: dict[str, Any]) -> dict[str, Any]:

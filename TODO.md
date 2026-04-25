@@ -18,7 +18,6 @@
 ## Product
 
 - Add authentication and multi-user workspaces.
-- Add project duplication, archiving, and search.
 - Add richer run history, diffs, and artifact version browsing.
 - Add notifications for plan-ready, approval-needed, and run-complete events.
 - Add first-class Windows support, including one-click start/stop scripts and packaging.
