@@ -189,6 +189,21 @@ export type RunControlPayload = {
   decided_by?: string;
 };
 
+export type PaperMetadataPayload = {
+  title?: string;
+  url?: string;
+  notes?: string;
+  abstract?: string;
+  doi?: string;
+  venue?: string;
+  year?: number;
+  authors_json?: string[] | string;
+  citation_key?: string;
+  source_provider?: string;
+  external_id?: string;
+  actor?: string;
+};
+
 export type RuntimeInfo = {
   host: string;
   port: number;
@@ -329,6 +344,28 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  updatePaperMetadata: (projectId: string, paperId: string, payload: PaperMetadataPayload) =>
+    request<{ paper: Paper; papers: Paper[] }>(
+      `/api/projects/${projectId}/papers/${paperId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      },
+    ),
+  refreshPaperMetadata: (projectId: string, paperId: string) =>
+    request<{ paper: Paper; papers: Paper[] }>(
+      `/api/projects/${projectId}/papers/${paperId}/refresh`,
+      {
+        method: "POST",
+      },
+    ),
+  deletePaper: (projectId: string, paperId: string) =>
+    request<{ deleted: boolean; papers: Paper[] }>(
+      `/api/projects/${projectId}/papers/${paperId}`,
+      {
+        method: "DELETE",
+      },
+    ),
   generatePlan: (projectId: string) =>
     request<{ plan: Plan }>(`/api/projects/${projectId}/plan/generate`, {
       method: "POST",

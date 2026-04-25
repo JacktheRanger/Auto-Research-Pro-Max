@@ -650,6 +650,179 @@ async def save_remote_paper(
     return _persist_paper_record(project_id, payload, settings or {})
 
 
+_EDITABLE_PAPER_FIELDS: tuple[str, ...] = (
+    "title",
+    "url",
+    "notes",
+    "abstract",
+    "doi",
+    "venue",
+    "year",
+    "authors_json",
+    "citation_key",
+    "source_provider",
+    "external_id",
+)
+
+
+def _split_authors_for_edit(value: str) -> list[str]:
+    chunks = re.split(r"\s*(?:;|\n|\r| and )\s*", value or "")
+    return _unique_preserve(chunks)
+
+
+def update_paper_metadata(
+    project_id: str,
+    paper_id: str,
+    payload: dict[str, Any],
+    settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    existing = get_paper(paper_id)
+    if existing is None or existing.get("project_id") != project_id:
+        raise LookupError("Paper not found in project")
+
+    updated = dict(existing)
+    metadata = dict(existing.get("metadata_json") or {})
+    edit_history = list(metadata.get("manual_edits") or [])
+
+    changed_fields: list[str] = []
+    for field in _EDITABLE_PAPER_FIELDS:
+        if field not in payload:
+            continue
+        new_value: Any = payload[field]
+        if field == "year":
+            try:
+                new_value = int(new_value or 0)
+            except (TypeError, ValueError):
+                new_value = 0
+        elif field == "authors_json":
+            if isinstance(new_value, str):
+                new_value = _split_authors_for_edit(new_value)
+            else:
+                new_value = _unique_preserve(list(new_value or []))
+        elif field == "doi":
+            new_value = _normalize_doi(new_value or "")
+        elif isinstance(new_value, str):
+            new_value = _clean_text(new_value)
+        if new_value != existing.get(field):
+            changed_fields.append(field)
+            updated[field] = new_value
+
+    if not changed_fields:
+        return existing
+
+    updated["title"] = updated.get("title") or existing.get("title") or "Paper"
+    updated["doi"] = _normalize_doi(updated.get("doi"))
+    updated["authors_json"] = _unique_preserve(list(updated.get("authors_json") or []))
+    updated["year"] = int(updated.get("year") or 0)
+    updated["canonical_key"] = _canonical_key(
+        updated["title"],
+        updated.get("doi") or "",
+        updated.get("external_id") or "",
+        updated["year"],
+        updated["authors_json"],
+    )
+
+    requested_citation = payload.get("citation_key") or updated.get("citation_key") or ""
+    base_citation = (
+        _clean_text(requested_citation)
+        or _base_citation_key(updated["title"], updated["authors_json"], updated["year"])
+    )
+    updated["citation_key"] = _ensure_unique_citation_key(project_id, base_citation, paper_id)
+
+    edit_history.append(
+        {
+            "fields": changed_fields,
+            "actor": _clean_text(payload.get("actor") or ""),
+        }
+    )
+    metadata["manual_edits"] = edit_history[-12:]
+    metadata["last_edited_fields"] = changed_fields
+    updated["metadata_json"] = metadata
+
+    saved = update_paper_source(paper_id, updated)
+    if saved is None:
+        raise RuntimeError("Failed to update paper metadata")
+    if "abstract" in changed_fields and not updated.get("extracted_text"):
+        updated["extracted_text"] = updated.get("abstract") or ""
+    index_paper(saved, settings or {})
+    refreshed = get_paper(paper_id)
+    return refreshed or saved
+
+
+async def refresh_paper_metadata(
+    project_id: str,
+    paper_id: str,
+    settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    existing = get_paper(paper_id)
+    if existing is None or existing.get("project_id") != project_id:
+        raise LookupError("Paper not found in project")
+
+    arxiv_meta: dict[str, Any] = {}
+    crossref_meta: dict[str, Any] = {}
+    fetched_layers: list[dict[str, Any]] = []
+    refresh_errors: dict[str, str] = {}
+
+    async with httpx.AsyncClient(
+        follow_redirects=True,
+        timeout=40.0,
+        headers={"User-Agent": USER_AGENT, "Accept": "application/atom+xml,application/json,*/*;q=0.5"},
+    ) as client:
+        candidate_urls = [existing.get("url") or ""]
+        if existing.get("metadata_json", {}).get("pdf_url"):
+            candidate_urls.append(existing["metadata_json"]["pdf_url"])
+        for url in [u for u in candidate_urls if u]:
+            try:
+                arxiv_meta = arxiv_meta or await _lookup_arxiv_metadata(client, url)
+            except Exception as exc:
+                refresh_errors["arxiv"] = str(exc)
+        doi_hint = _normalize_doi(existing.get("doi") or "")
+        if doi_hint:
+            try:
+                crossref_meta = await _lookup_crossref_by_doi(client, doi_hint)
+            except Exception as exc:
+                refresh_errors["crossref"] = str(exc)
+
+    if arxiv_meta:
+        fetched_layers.append(arxiv_meta)
+    if crossref_meta:
+        fetched_layers.append(crossref_meta)
+
+    if not fetched_layers:
+        existing_metadata = dict(existing.get("metadata_json") or {})
+        existing_metadata["last_refresh_errors"] = refresh_errors
+        existing_metadata["last_refresh_status"] = "no_provider_data"
+        update_paper_source(paper_id, {**existing, "metadata_json": existing_metadata})
+        return get_paper(paper_id) or existing
+
+    merged = _merge_metadata_layers(existing, *fetched_layers)
+    merged["project_id"] = existing["project_id"]
+    merged["source_type"] = existing.get("source_type") or merged.get("source_type") or "remote_link"
+    metadata = dict(existing.get("metadata_json") or {})
+    metadata.update(merged.get("metadata_json") or {})
+    refresh_log = list(metadata.get("provider_refreshes") or [])
+    refresh_log.append(
+        {
+            "providers": [layer.get("source_provider") for layer in fetched_layers if layer.get("source_provider")],
+            "errors": refresh_errors,
+        }
+    )
+    metadata["provider_refreshes"] = refresh_log[-8:]
+    metadata["last_refresh_status"] = "ok"
+    metadata["last_refresh_errors"] = refresh_errors
+    merged["metadata_json"] = metadata
+    merged["citation_key"] = _ensure_unique_citation_key(
+        project_id,
+        existing.get("citation_key") or merged.get("citation_key") or "sourcendpaper",
+        paper_id,
+    )
+    saved = update_paper_source(paper_id, merged)
+    if saved is None:
+        raise RuntimeError("Failed to refresh paper metadata")
+    index_paper(saved, settings or {})
+    return get_paper(paper_id) or saved
+
+
 async def save_literature_result(
     project_id: str,
     result: dict[str, Any],

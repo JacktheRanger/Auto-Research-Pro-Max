@@ -8,7 +8,6 @@
 ## Retrieval And Papers
 
 - Add OCR fallback for scanned or image-only PDFs.
-- Add manual metadata editing and provider refresh controls for imported papers.
 - Add incremental re-indexing and larger-scale local retrieval storage for bigger paper collections.
 - Add citation-graph extraction on top of normalized paper identifiers.
 
