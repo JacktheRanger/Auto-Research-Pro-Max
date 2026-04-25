@@ -221,6 +221,26 @@ export type RuntimeInfo = {
   lan_urls: string[];
 };
 
+export type ProjectTemplate = {
+  key: string;
+  label: string;
+  summary: string;
+  tags: string[];
+  defaults: {
+    title?: string;
+    idea?: string;
+    background?: string;
+    direction?: string;
+    goals?: string;
+    constraints_text?: string;
+    compute_budget?: string;
+    api_budget?: string;
+    sandbox_setup_command?: string;
+    sandbox_run_command?: string;
+    expected_artifacts?: string[];
+  };
+};
+
 export type LiteratureResult = {
   provider: string;
   title: string;
@@ -288,6 +308,8 @@ export const api = {
   health: () => request<{ status: string; stage_count: number }>("/api/health"),
   getRuntime: () => request<RuntimeInfo>("/api/runtime"),
   getStages: () => request<{ planning_gate: boolean; stages: StageCatalogItem[] }>("/api/stages"),
+  getProjectTemplates: () =>
+    request<{ templates: ProjectTemplate[] }>("/api/project-templates"),
   getSettings: () => request<Settings>("/api/settings"),
   saveSettings: (payload: Settings) =>
     request<Settings>("/api/settings", {
