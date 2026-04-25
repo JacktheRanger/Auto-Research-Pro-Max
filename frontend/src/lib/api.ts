@@ -334,6 +334,25 @@ export type CitationGraph = {
   unresolved_references: Array<{ source_paper_id: string; kind: string; id: string }>;
 };
 
+export type StageDiff = {
+  missing: boolean;
+  stage_key: string;
+  stage_label: string;
+  stage_index: number;
+  status_a: string;
+  status_b: string;
+  content_diff: string[];
+  artifact_diff: string[];
+  content_changed: boolean;
+  artifact_changed: boolean;
+};
+
+export type RunDiff = {
+  run_a: Run;
+  run_b: Run;
+  stage_diffs: StageDiff[];
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     headers: {
@@ -449,6 +468,10 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ disabled_stage_keys: disabledStageKeys }),
     }),
+  listProjectRuns: (projectId: string) =>
+    request<{ runs: Run[] }>(`/api/projects/${projectId}/runs`),
+  diffRuns: (runId: string, against: string) =>
+    request<RunDiff>(`/api/runs/${runId}/diff?against=${encodeURIComponent(against)}`),
   reindexProject: (projectId: string, force = false) =>
     request<{
       project_id: string;
