@@ -969,6 +969,102 @@ textarea {
   border-color: var(--accent);
 }
 
+.notifications-tray {
+  position: relative;
+  margin-left: auto;
+}
+
+.notifications-toggle {
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.notifications-toggle.has-new {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(217, 130, 59, 0.18);
+}
+
+.notifications-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.4rem);
+  background: var(--bg-panel-strong);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 0.6rem 0.75rem;
+  width: min(320px, 80vw);
+  box-shadow: var(--shadow);
+  z-index: 50;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.notifications-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.notifications-actions {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.notifications-actions button {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.78rem;
+}
+
+.notifications-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.notifications-list li {
+  display: grid;
+  gap: 0.15rem;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.82rem;
+}
+
+.notifications-list time {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.notification-run_failed strong {
+  color: var(--danger);
+}
+
+.notification-approval_needed strong {
+  color: var(--warning);
+}
+
+.notification-run_complete strong,
+.notification-plan_ready strong {
+  color: var(--mint);
+}
+
 .json-surface {
   background: rgba(7, 21, 26, 0.06);
   border: 1px solid var(--line);

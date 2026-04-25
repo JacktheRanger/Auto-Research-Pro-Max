@@ -19,6 +19,5 @@
 
 - Add authentication and multi-user workspaces.
 - Add richer run history, diffs, and artifact version browsing.
-- Add notifications for plan-ready, approval-needed, and run-complete events.
 - Add first-class Windows support, including one-click start/stop scripts and packaging.
 - Add deployment recipes for Docker and Cloudflare-hosted frontend plus API backend.
