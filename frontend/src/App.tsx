@@ -2347,6 +2347,8 @@ export default function App() {
   const [projectDetail, setProjectDetail] = useState<ProjectDetail | null>(null);
   const [projectSearch, setProjectSearch] = useState("");
   const [projectIncludeArchived, setProjectIncludeArchived] = useState(true);
+  const [setupCollapsed, setSetupCollapsed] = useState(true);
+  const [projectsCollapsed, setProjectsCollapsed] = useState(true);
   const [citationGraph, setCitationGraph] = useState<CitationGraph | null>(null);
   const [projectRuns, setProjectRuns] = useState<Run[]>([]);
   const [diffAgainstRunId, setDiffAgainstRunId] = useState("");
@@ -3271,9 +3273,16 @@ export default function App() {
     <div className="page-shell">
       <section className="hero">
         <div className="hero-copy">
-          <h1 className="hero-brand">Auto Research Pro Max</h1>
+          <div className="hero-title-row">
+            <h1 className="hero-brand">Auto Research Pro Max</h1>
+            <span className="preview-badge">Research Preview</span>
+          </div>
           <span className="eyebrow">{text.heroEyebrow}</span>
           <h2>{text.heroTitle}</h2>
+          <div className="hero-status">
+            <span>{health?.status === "ok" ? text.backendReady : text.backendOffline}</span>
+            <span>{text.liveStages(health?.stage_count ?? 0)}</span>
+          </div>
         </div>
         <div className="status-stack">
           {runtimeInfo?.mode === "lan" && lanCopyTarget ? (
@@ -3335,169 +3344,188 @@ export default function App() {
       </section>
 
       <div className="app-shell">
-        <aside className="left-rail">
-          <section className="brand-card">
-            <span className="eyebrow">Auto Research Pro Max</span>
-            <h1>{text.brandTitle}</h1>
-            <p>{text.brandBody}</p>
-            <div className="meta-row">
-              <span>{health?.status === "ok" ? text.backendReady : text.backendOffline}</span>
-              <span>{text.liveStages(health?.stage_count ?? 0)}</span>
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="panel-header">
-              <h2>{text.setup}</h2>
-              <button onClick={handleSaveSettings} type="button">
-                {text.save}
-              </button>
-            </div>
-            <label>
-              {text.apiKey}
-              <input
-                type="password"
-                value={settings.api_key}
-                onChange={(event) => setSettings({ ...settings, api_key: event.target.value })}
-                placeholder="sk-..."
-              />
-            </label>
-            <label>
-              Base URL
-              <input
-                value={settings.base_url}
-                onChange={(event) => setSettings({ ...settings, base_url: event.target.value })}
-              />
-            </label>
-            <label>
-              {text.researchModel}
-              <input
-                value={settings.research_model}
-                onChange={(event) => setSettings({ ...settings, research_model: event.target.value })}
-                placeholder="gpt-5.5"
-              />
-            </label>
-            <label>
-              {text.codeModel}
-              <input
-                value={settings.code_model}
-                onChange={(event) => setSettings({ ...settings, code_model: event.target.value })}
-                placeholder="gpt-5.5"
-              />
-            </label>
-            <label>
-              {text.embeddingModel}
-              <input
-                value={settings.embedding_model}
-                onChange={(event) => setSettings({ ...settings, embedding_model: event.target.value })}
-                placeholder={text.optional}
-              />
-            </label>
-            <label>
-              {text.notes}
-              <textarea
-                value={settings.notes}
-                onChange={(event) => setSettings({ ...settings, notes: event.target.value })}
-                placeholder={text.notesPlaceholder}
-              />
-            </label>
-            <button className="secondary" onClick={handleTestSettings} type="button">
-              {text.testConnection}
-            </button>
-            <p className="muted">{connectionMessage || text.noConnectionTest}</p>
-            <div className="danger-zone">
-              <span className="danger-zone-label">{text.overviewWipe}</span>
-              <button
-                type="button"
-                className="overview-wipe danger-zone-button"
-                onClick={() => void handleWipeAll()}
-              >
-                {text.overviewWipe}
-              </button>
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="panel-header">
-              <h2>{text.projects}</h2>
-            </div>
-            <div className="project-controls">
-              <input
-                value={projectSearch}
-                onChange={(event) => setProjectSearch(event.target.value)}
-                placeholder={text.projectSearchPlaceholder}
-              />
-              <label className="inline-toggle">
-                <input
-                  type="checkbox"
-                  checked={projectIncludeArchived}
-                  onChange={(event) => setProjectIncludeArchived(event.target.checked)}
-                />
-                {text.projectIncludeArchived}
-              </label>
-            </div>
-            <div className="project-list">
-              {filteredProjects.length === 0 ? (
-                <p className="muted">{text.projectsEmpty}</p>
-              ) : null}
-              {filteredProjects.map((project) => {
-                const archived = Boolean(project.archived_at);
-                return (
-                  <div
-                    key={project.id}
-                    className={`project-chip-row ${selectedProjectId === project.id ? "selected" : ""} ${archived ? "archived" : ""}`}
-                  >
-                    <button
-                      className="project-chip"
-                      onClick={() => void loadProject(project.id)}
-                      type="button"
-                    >
-                      <strong>{project.title}</strong>
-                      <span>
-                        {project.status}
-                        {archived ? ` · ${text.projectArchivedLabel}` : ""}
-                        {project.duplicated_from ? ` · ${text.projectDuplicatedLabel}` : ""}
-                      </span>
-                    </button>
-                    <div className="project-chip-actions">
-                      <button
-                        type="button"
-                        title={text.projectDuplicate}
-                        onClick={() => void handleDuplicateProject(project.id)}
-                      >
-                        ⧉
-                      </button>
-                      <button
-                        type="button"
-                        title={text.projectReset}
-                        onClick={() => void handleResetProject(project)}
-                      >
-                        ↺
-                      </button>
-                      <button
-                        type="button"
-                        title={archived ? text.projectUnarchive : text.projectArchive}
-                        onClick={() => void handleToggleArchive(project)}
-                      >
-                        {archived ? "⤴" : "📦"}
-                      </button>
-                      <button
-                        type="button"
-                        className="danger"
-                        title={text.projectDelete}
-                        onClick={() => void handleDeleteProject(project)}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        </aside>
-
         <main className="main-column">
+          <section className="grid two-up">
+            <section className="panel collapsible">
+              <div className="panel-header">
+                <button
+                  type="button"
+                  className="panel-toggle"
+                  onClick={() => setSetupCollapsed((value) => !value)}
+                  aria-expanded={!setupCollapsed}
+                >
+                  <span className={`chevron ${setupCollapsed ? "collapsed" : ""}`}>▾</span>
+                  <h2>{text.setup}</h2>
+                </button>
+                {!setupCollapsed ? (
+                  <button onClick={handleSaveSettings} type="button">
+                    {text.save}
+                  </button>
+                ) : null}
+              </div>
+              {!setupCollapsed ? (
+                <>
+                  <div className="setup-grid">
+                    <label>
+                      {text.apiKey}
+                      <input
+                        type="password"
+                        value={settings.api_key}
+                        onChange={(event) => setSettings({ ...settings, api_key: event.target.value })}
+                        placeholder="sk-..."
+                      />
+                    </label>
+                    <label>
+                      Base URL
+                      <input
+                        value={settings.base_url}
+                        onChange={(event) => setSettings({ ...settings, base_url: event.target.value })}
+                      />
+                    </label>
+                    <label>
+                      {text.researchModel}
+                      <input
+                        value={settings.research_model}
+                        onChange={(event) => setSettings({ ...settings, research_model: event.target.value })}
+                        placeholder="gpt-5.5"
+                      />
+                    </label>
+                    <label>
+                      {text.codeModel}
+                      <input
+                        value={settings.code_model}
+                        onChange={(event) => setSettings({ ...settings, code_model: event.target.value })}
+                        placeholder="gpt-5.5"
+                      />
+                    </label>
+                    <label>
+                      {text.embeddingModel}
+                      <input
+                        value={settings.embedding_model}
+                        onChange={(event) => setSettings({ ...settings, embedding_model: event.target.value })}
+                        placeholder={text.optional}
+                      />
+                    </label>
+                  </div>
+                  <label>
+                    {text.notes}
+                    <textarea
+                      value={settings.notes}
+                      onChange={(event) => setSettings({ ...settings, notes: event.target.value })}
+                      placeholder={text.notesPlaceholder}
+                    />
+                  </label>
+                  <button className="secondary" onClick={handleTestSettings} type="button">
+                    {text.testConnection}
+                  </button>
+                  <p className="muted">{connectionMessage || text.noConnectionTest}</p>
+                  <div className="danger-zone">
+                    <span className="danger-zone-label">{text.overviewWipe}</span>
+                    <button
+                      type="button"
+                      className="overview-wipe danger-zone-button"
+                      onClick={() => void handleWipeAll()}
+                    >
+                      {text.overviewWipe}
+                    </button>
+                  </div>
+                </>
+              ) : null}
+            </section>
+
+            <section className="panel collapsible">
+              <div className="panel-header">
+                <button
+                  type="button"
+                  className="panel-toggle"
+                  onClick={() => setProjectsCollapsed((value) => !value)}
+                  aria-expanded={!projectsCollapsed}
+                >
+                  <span className={`chevron ${projectsCollapsed ? "collapsed" : ""}`}>▾</span>
+                  <h2>{text.projects}</h2>
+                </button>
+                <span className="muted panel-meta">{filteredProjects.length}</span>
+              </div>
+              {!projectsCollapsed ? (
+                <>
+                  <div className="project-controls">
+                    <input
+                      value={projectSearch}
+                      onChange={(event) => setProjectSearch(event.target.value)}
+                      placeholder={text.projectSearchPlaceholder}
+                    />
+                    <label className="inline-toggle">
+                      <input
+                        type="checkbox"
+                        checked={projectIncludeArchived}
+                        onChange={(event) => setProjectIncludeArchived(event.target.checked)}
+                      />
+                      {text.projectIncludeArchived}
+                    </label>
+                  </div>
+                  <div className="project-list">
+                    {filteredProjects.length === 0 ? (
+                      <p className="muted">{text.projectsEmpty}</p>
+                    ) : null}
+                    {filteredProjects.map((project) => {
+                      const archived = Boolean(project.archived_at);
+                      return (
+                        <div
+                          key={project.id}
+                          className={`project-chip-row ${selectedProjectId === project.id ? "selected" : ""} ${archived ? "archived" : ""}`}
+                        >
+                          <button
+                            className="project-chip"
+                            onClick={() => void loadProject(project.id)}
+                            type="button"
+                          >
+                            <strong>{project.title}</strong>
+                            <span>
+                              {project.status}
+                              {archived ? ` · ${text.projectArchivedLabel}` : ""}
+                              {project.duplicated_from ? ` · ${text.projectDuplicatedLabel}` : ""}
+                            </span>
+                          </button>
+                          <div className="project-chip-actions">
+                            <button
+                              type="button"
+                              title={text.projectDuplicate}
+                              onClick={() => void handleDuplicateProject(project.id)}
+                            >
+                              ⧉
+                            </button>
+                            <button
+                              type="button"
+                              title={text.projectReset}
+                              onClick={() => void handleResetProject(project)}
+                            >
+                              ↺
+                            </button>
+                            <button
+                              type="button"
+                              title={archived ? text.projectUnarchive : text.projectArchive}
+                              onClick={() => void handleToggleArchive(project)}
+                            >
+                              {archived ? "⤴" : "📦"}
+                            </button>
+                            <button
+                              type="button"
+                              className="danger"
+                              title={text.projectDelete}
+                              onClick={() => void handleDeleteProject(project)}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : null}
+            </section>
+          </section>
+
           <section className="grid two-up">
             <form className="panel" onSubmit={handleCreateProject}>
               <div className="panel-header">
