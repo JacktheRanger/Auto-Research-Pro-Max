@@ -303,6 +303,36 @@ export type GroundedSearchResponse = {
   results: GroundedPaperResult[];
 };
 
+export type CitationNode = {
+  id: string;
+  kind: "paper" | "doi" | "arxiv" | string;
+  label: string;
+  doi?: string;
+  year?: number;
+  venue?: string;
+  citation_key?: string;
+  preview_thumbnail_url?: string;
+  external_id?: string;
+};
+
+export type CitationEdge = {
+  source: string;
+  target: string;
+  kind: string;
+};
+
+export type CitationGraph = {
+  nodes: CitationNode[];
+  edges: CitationEdge[];
+  summary: {
+    papers: number;
+    external_references: number;
+    internal_links: number;
+    unresolved_links: number;
+  };
+  unresolved_references: Array<{ source_paper_id: string; kind: string; id: string }>;
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     headers: {
@@ -411,6 +441,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  getCitationGraph: (projectId: string) =>
+    request<CitationGraph>(`/api/projects/${projectId}/citation-graph`),
   searchLiterature: (projectId: string, payload: { query: string; limit_per_provider?: number }) =>
     request<LiteratureSearchResponse>(`/api/projects/${projectId}/literature/search`, {
       method: "POST",
