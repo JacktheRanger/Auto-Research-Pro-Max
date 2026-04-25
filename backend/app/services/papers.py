@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
+import shutil
 import xml.etree.ElementTree as ET
 from html import unescape
 from pathlib import Path
@@ -22,6 +24,17 @@ from ..db import (
 from .grounding import index_paper
 
 USER_AGENT = "AutoResearchProMax/0.2 (paper-intake metadata enrichment)"
+MIN_TEXT_FOR_OCR_SKIP = 320  # below this we treat the PDF as scanned and try OCR
+OCR_PAGE_LIMIT = 8
+OCR_RENDER_DPI = 220
+
+
+def _tesseract_available() -> str:
+    override = (os.environ.get("TESSERACT_CMD") or "").strip()
+    if override and Path(override).exists():
+        return override
+    found = shutil.which("tesseract")
+    return found or ""
 DOI_RE = re.compile(r"10\.\d{4,9}/[-._;()/:a-z0-9]+", re.IGNORECASE)
 ARXIV_RE = re.compile(r"arxiv\.org/(?:abs|pdf)/([^/?#]+)", re.IGNORECASE)
 YEAR_RE = re.compile(r"(19|20)\d{2}")
@@ -165,6 +178,78 @@ def extract_pdf_bundle(path: Path) -> dict[str, Any]:
     except Exception as exc:
         payload["text"] = f"[extract_failed] {exc}"
     return payload
+
+
+def ocr_pdf_text(path: Path, *, page_limit: int = OCR_PAGE_LIMIT) -> dict[str, Any]:
+    """Render PDF pages with PyMuPDF, run OCR per page when tesseract is available.
+
+    Returns ``{"status", "text", "engine", "pages", "languages", "missing"}``.
+    The status is one of: ``ok``, ``empty``, ``no_tesseract``, ``no_pytesseract``,
+    ``no_pymupdf``, or ``error``.
+    """
+    report: dict[str, Any] = {
+        "status": "empty",
+        "text": "",
+        "engine": "",
+        "pages": 0,
+        "languages": "",
+        "missing": [],
+    }
+    try:
+        import fitz
+    except Exception:
+        report["status"] = "no_pymupdf"
+        report["missing"].append("pymupdf")
+        return report
+    try:
+        import pytesseract
+    except Exception:
+        report["status"] = "no_pytesseract"
+        report["missing"].append("pytesseract")
+        return report
+    try:
+        from PIL import Image  # noqa: F401
+    except Exception:
+        report["status"] = "no_pytesseract"
+        report["missing"].append("Pillow")
+        return report
+
+    binary = _tesseract_available()
+    if not binary:
+        report["status"] = "no_tesseract"
+        report["missing"].append("tesseract")
+        return report
+
+    pytesseract.pytesseract.tesseract_cmd = binary
+    languages = (os.environ.get("OCR_LANGUAGES") or "eng").strip() or "eng"
+    chunks: list[str] = []
+    try:
+        with fitz.open(path) as document:
+            total = min(document.page_count, page_limit)
+            for index in range(total):
+                page = document.load_page(index)
+                pixmap = page.get_pixmap(dpi=OCR_RENDER_DPI, alpha=False)
+                image_bytes = pixmap.tobytes("png")
+                from PIL import Image
+                from io import BytesIO
+
+                with Image.open(BytesIO(image_bytes)) as image:
+                    text = pytesseract.image_to_string(image, lang=languages) or ""
+                if text.strip():
+                    chunks.append(text)
+            report["pages"] = total
+    except Exception as exc:
+        report["status"] = "error"
+        report["text"] = ""
+        report["error"] = str(exc)
+        return report
+
+    text = "\n".join(chunks).strip()
+    report["text"] = text[:80000]
+    report["engine"] = "tesseract"
+    report["languages"] = languages
+    report["status"] = "ok" if text else "empty"
+    return report
 
 
 def render_pdf_preview(path: Path) -> dict[str, str]:
@@ -476,21 +561,40 @@ def _save_pdf_bytes(project_id: str, file_name: str, content: bytes) -> dict[str
     target.write_bytes(content)
     pdf_bundle = extract_pdf_bundle(target)
     previews = render_pdf_preview(target)
+    extracted = pdf_bundle.get("text") or ""
+    metadata: dict[str, Any] = {
+        "page_count": pdf_bundle.get("page_count", 0),
+        "pdf_metadata": pdf_bundle.get("metadata", {}),
+    }
+    if (
+        len(extracted.strip()) < MIN_TEXT_FOR_OCR_SKIP
+        or extracted.startswith("[extract_failed]")
+    ):
+        ocr_report = ocr_pdf_text(target)
+        metadata["ocr"] = {
+            "status": ocr_report.get("status"),
+            "engine": ocr_report.get("engine") or "",
+            "pages_processed": ocr_report.get("pages") or 0,
+            "languages": ocr_report.get("languages") or "",
+            "missing_dependencies": ocr_report.get("missing") or [],
+            "triggered_reason": "low_text" if not extracted.startswith("[extract_failed]") else "extract_failed",
+        }
+        ocr_text = ocr_report.get("text") or ""
+        if ocr_text:
+            extracted = ocr_text if not extracted.strip() else f"{extracted}\n\n[OCR Recovery]\n{ocr_text}"
+            metadata["ocr"]["recovered_chars"] = len(ocr_text)
     return {
         "file_name": normalized_name,
         "stored_path": str(target),
         "content_hash": _hash_bytes(content),
         "preview_image_path": previews.get("preview_image_path", ""),
         "preview_thumbnail_path": previews.get("preview_thumbnail_path", ""),
-        "extracted_text": pdf_bundle.get("text", ""),
+        "extracted_text": extracted,
         "title": pdf_bundle.get("title", ""),
         "authors_json": pdf_bundle.get("authors", []),
         "doi": pdf_bundle.get("doi", ""),
         "year": pdf_bundle.get("year", 0),
-        "metadata_json": {
-            "page_count": pdf_bundle.get("page_count", 0),
-            "pdf_metadata": pdf_bundle.get("metadata", {}),
-        },
+        "metadata_json": metadata,
     }
 
 
@@ -747,6 +851,44 @@ def update_paper_metadata(
     index_paper(saved, settings or {})
     refreshed = get_paper(paper_id)
     return refreshed or saved
+
+
+def reocr_paper(
+    project_id: str,
+    paper_id: str,
+    settings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    existing = get_paper(paper_id)
+    if existing is None or existing.get("project_id") != project_id:
+        raise LookupError("Paper not found in project")
+    stored_path = existing.get("stored_path") or ""
+    if not stored_path or not Path(stored_path).exists():
+        raise LookupError("Paper does not have a local PDF available for OCR.")
+    report = ocr_pdf_text(Path(stored_path))
+    metadata = dict(existing.get("metadata_json") or {})
+    metadata["ocr"] = {
+        "status": report.get("status"),
+        "engine": report.get("engine") or "",
+        "pages_processed": report.get("pages") or 0,
+        "languages": report.get("languages") or "",
+        "missing_dependencies": report.get("missing") or [],
+        "triggered_reason": "manual",
+    }
+    text = report.get("text") or ""
+    updated = dict(existing)
+    updated["metadata_json"] = metadata
+    if text:
+        metadata["ocr"]["recovered_chars"] = len(text)
+        existing_text = (existing.get("extracted_text") or "").strip()
+        updated["extracted_text"] = (
+            text if not existing_text else f"{existing_text}\n\n[OCR Recovery]\n{text}"
+        )
+    saved = update_paper_source(paper_id, updated)
+    if saved is None:
+        raise RuntimeError("Failed to persist OCR result")
+    if text:
+        index_paper(saved, settings or {})
+    return get_paper(paper_id) or saved
 
 
 async def refresh_paper_metadata(

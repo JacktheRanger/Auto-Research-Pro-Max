@@ -7,7 +7,6 @@
 
 ## Retrieval And Papers
 
-- Add OCR fallback for scanned or image-only PDFs.
 - Add incremental re-indexing and larger-scale local retrieval storage for bigger paper collections.
 - Add citation-graph extraction on top of normalized paper identifiers.
 

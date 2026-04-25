@@ -34,6 +34,7 @@ from .services.grounding import retrieve_grounded_snippets
 from .services.llm import generate_plan_markdown, test_connection
 from .services.papers import (
     refresh_paper_metadata,
+    reocr_paper,
     save_literature_result,
     save_remote_paper,
     save_uploaded_paper,
@@ -298,6 +299,21 @@ async def papers_refresh_metadata(project_id: str, paper_id: str) -> dict[str, A
         refreshed = await refresh_paper_metadata(project_id, paper_id, get_settings())
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"paper": refreshed, "papers": list_papers(project_id)}
+
+
+@app.post("/api/projects/{project_id}/papers/{paper_id}/ocr")
+async def papers_run_ocr(project_id: str, paper_id: str) -> dict[str, Any]:
+    project = get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    paper = get_paper(paper_id)
+    if paper is None or paper.get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="Paper not found in project")
+    try:
+        refreshed = reocr_paper(project_id, paper_id, get_settings())
+    except LookupError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"paper": refreshed, "papers": list_papers(project_id)}
 
 
