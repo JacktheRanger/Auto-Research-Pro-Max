@@ -239,6 +239,15 @@ def start_server(host: str, mode: str, port: int = DEFAULT_PORT) -> None:
         info(f"Server process {pid} exists. Waiting for health check...")
     else:
         info("Starting backend server...")
+        popen_kwargs: dict[str, object] = {
+            "cwd": ROOT,
+        }
+        if sys.platform == "win32":
+            # Windows uses CREATE_NEW_PROCESS_GROUP so we can deliver CTRL_BREAK
+            # later. start_new_session is POSIX-only.
+            popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        else:
+            popen_kwargs["start_new_session"] = True
         with SERVER_LOG.open("ab") as log_file:
             process = subprocess.Popen(
                 [
@@ -249,10 +258,9 @@ def start_server(host: str, mode: str, port: int = DEFAULT_PORT) -> None:
                     "--port",
                     str(port),
                 ],
-                cwd=ROOT,
                 stdout=log_file,
                 stderr=subprocess.STDOUT,
-                start_new_session=True,
+                **popen_kwargs,
             )
         PID_FILE.write_text(str(process.pid))
         save_server_meta(host, port, mode)
@@ -267,6 +275,45 @@ def start_server(host: str, mode: str, port: int = DEFAULT_PORT) -> None:
     fail("Server did not become healthy in time. Check .runtime/server.log")
 
 
+def _terminate_windows(pid: int) -> bool:
+    info(f"Stopping server {pid} via taskkill...")
+    result = subprocess.run(
+        ["taskkill", "/PID", str(pid), "/T", "/F"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.STDOUT,
+    )
+    if result.returncode != 0:
+        info(f"taskkill returned exit code {result.returncode}; process may already be gone.")
+    for _ in range(20):
+        if not process_alive(pid):
+            return True
+        time.sleep(0.25)
+    return False
+
+
+def _terminate_posix(pid: int) -> bool:
+    try:
+        os.killpg(pid, signal.SIGTERM)
+    except (OSError, AttributeError):
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
+            return not process_alive(pid)
+    for _ in range(20):
+        if not process_alive(pid):
+            return True
+        time.sleep(0.25)
+    info("Server did not exit after SIGTERM. Sending SIGKILL.")
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except (OSError, AttributeError):
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
+    return not process_alive(pid)
+
+
 def stop_server() -> None:
     pid = existing_pid()
     if pid is None:
@@ -278,19 +325,13 @@ def stop_server() -> None:
         PID_FILE.unlink(missing_ok=True)
         remove_server_meta()
         return
-    info(f"Stopping server {pid}...")
-    os.killpg(pid, signal.SIGTERM)
-    for _ in range(20):
-        if not process_alive(pid):
-            PID_FILE.unlink(missing_ok=True)
-            remove_server_meta()
-            info("Server stopped.")
-            return
-        time.sleep(0.25)
-    info("Server did not exit after SIGTERM. Sending SIGKILL.")
-    os.killpg(pid, signal.SIGKILL)
+    success = _terminate_windows(pid) if sys.platform == "win32" else _terminate_posix(pid)
     PID_FILE.unlink(missing_ok=True)
     remove_server_meta()
+    if success:
+        info("Server stopped.")
+    else:
+        info("Stop sequence completed but the process could not be confirmed dead. Check Task Manager / Activity Monitor.")
 
 
 def print_access_urls(port: int, mode: str) -> None:
