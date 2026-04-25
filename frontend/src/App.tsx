@@ -22,6 +22,14 @@ import {
 type ThemeMode = "light" | "dark";
 type LocaleMode = "en" | "cn";
 
+type NotificationEntry = {
+  id: string;
+  title: string;
+  body: string;
+  createdAt: number;
+  kind: "plan_ready" | "approval_needed" | "run_complete" | "run_failed";
+};
+
 const activeRunStatuses = new Set(["queued", "running", "paused", "awaiting_approval"]);
 
 const stageLocaleCopy: Record<
@@ -347,6 +355,17 @@ const uiCopy = {
     projectUnarchivedMessage: "Project restored.",
     projectDeletedMessage: "Project deleted.",
     projectDeleteConfirm: "Delete project \"{title}\" and all its papers / runs? This cannot be undone.",
+    notifications: "Notifications",
+    notificationsEnable: "Enable desktop notifications",
+    notificationsEnabled: "Desktop notifications enabled",
+    notificationsBlocked: "Browser blocked desktop notifications",
+    notificationsUnsupported: "Browser does not support notifications",
+    notificationsClear: "Clear",
+    notificationsEmpty: "No new notifications.",
+    notificationPlanReadyTitle: "Plan ready for review",
+    notificationApprovalNeededTitle: "Approval needed",
+    notificationRunCompleteTitle: "Run complete",
+    notificationRunFailedTitle: "Run failed",
   },
   cn: {
     ready: "已就绪。",
@@ -582,6 +601,17 @@ const uiCopy = {
     projectUnarchivedMessage: "项目已恢复。",
     projectDeletedMessage: "项目已删除。",
     projectDeleteConfirm: "确认删除项目 “{title}” 及其所有论文/运行？此操作不可恢复。",
+    notifications: "通知",
+    notificationsEnable: "启用桌面通知",
+    notificationsEnabled: "桌面通知已启用",
+    notificationsBlocked: "浏览器已禁止桌面通知",
+    notificationsUnsupported: "浏览器不支持通知",
+    notificationsClear: "清空",
+    notificationsEmpty: "暂无新通知。",
+    notificationPlanReadyTitle: "计划已可审阅",
+    notificationApprovalNeededTitle: "需要审批",
+    notificationRunCompleteTitle: "运行已完成",
+    notificationRunFailedTitle: "运行失败",
   },
 } satisfies Record<
   LocaleMode,
@@ -764,6 +794,81 @@ type TemplatePickerCopy = {
   projectTemplatesHint: string;
   templateNone: string;
 };
+
+type NotificationsCopy = {
+  notifications: string;
+  notificationsEnable: string;
+  notificationsEnabled: string;
+  notificationsBlocked: string;
+  notificationsUnsupported: string;
+  notificationsClear: string;
+  notificationsEmpty: string;
+};
+
+function NotificationsTray({
+  notifications,
+  permission,
+  text,
+  onEnable,
+  onClear,
+}: {
+  notifications: NotificationEntry[];
+  permission: NotificationPermission | "unsupported";
+  text: NotificationsCopy;
+  onEnable: () => void;
+  onClear: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const unread = notifications.length;
+  return (
+    <div className={`notifications-tray ${open ? "is-open" : ""}`}>
+      <button
+        type="button"
+        className={`notifications-toggle ${unread > 0 ? "has-new" : ""}`}
+        onClick={() => setOpen((current) => !current)}
+        aria-label={text.notifications}
+      >
+        🔔 {unread > 0 ? unread : ""}
+      </button>
+      {open ? (
+        <div className="notifications-popover">
+          <div className="notifications-head">
+            <strong>{text.notifications}</strong>
+            <div className="notifications-actions">
+              {permission === "granted" ? (
+                <span className="muted">{text.notificationsEnabled}</span>
+              ) : permission === "denied" ? (
+                <span className="muted">{text.notificationsBlocked}</span>
+              ) : permission === "unsupported" ? (
+                <span className="muted">{text.notificationsUnsupported}</span>
+              ) : (
+                <button type="button" onClick={onEnable}>
+                  {text.notificationsEnable}
+                </button>
+              )}
+              <button type="button" onClick={onClear} disabled={unread === 0}>
+                {text.notificationsClear}
+              </button>
+            </div>
+          </div>
+          {unread === 0 ? (
+            <p className="muted">{text.notificationsEmpty}</p>
+          ) : (
+            <ul className="notifications-list">
+              {notifications.map((entry) => (
+                <li key={entry.id} className={`notification-${entry.kind}`}>
+                  <strong>{entry.title}</strong>
+                  <span>{entry.body}</span>
+                  <time>{new Date(entry.createdAt).toLocaleTimeString()}</time>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function ProjectTemplatePicker({
   templates,
@@ -1543,6 +1648,10 @@ export default function App() {
   const [projectDetail, setProjectDetail] = useState<ProjectDetail | null>(null);
   const [projectSearch, setProjectSearch] = useState("");
   const [projectIncludeArchived, setProjectIncludeArchived] = useState(true);
+  const [notifications, setNotifications] = useState<NotificationEntry[]>([]);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">(
+    typeof Notification === "undefined" ? "unsupported" : Notification.permission,
+  );
   const [run, setRun] = useState<Run | null>(null);
   const [runStages, setRunStages] = useState<RunStage[]>([]);
   const [auditEvents, setAuditEvents] = useState<RunAuditEvent[]>([]);
@@ -1735,6 +1844,89 @@ export default function App() {
   useEffect(() => {
     setExecutionForm(projectToExecutionForm(projectDetail?.project ?? null));
   }, [projectDetail?.project]);
+
+  function pushNotification(entry: Omit<NotificationEntry, "id" | "createdAt">) {
+    const next: NotificationEntry = {
+      ...entry,
+      id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      createdAt: Date.now(),
+    };
+    setNotifications((current) => [next, ...current].slice(0, 12));
+    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+      try {
+        new Notification(entry.title, { body: entry.body });
+      } catch {
+        // ignore — desktop notification failures should not impact UI
+      }
+    }
+  }
+
+  const planStatus = projectDetail?.plan?.status ?? "";
+  useEffect(() => {
+    if (!projectDetail?.plan) {
+      return;
+    }
+    if (planStatus !== "ready") {
+      return;
+    }
+    pushNotification({
+      kind: "plan_ready",
+      title: text.notificationPlanReadyTitle,
+      body: projectDetail.project.title,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planStatus, projectDetail?.project.id]);
+
+  const runStatus = run?.status ?? "";
+  const pendingGate = run?.pending_gate_index ?? 0;
+  useEffect(() => {
+    if (!run) {
+      return;
+    }
+    if (runStatus === "awaiting_approval" && pendingGate > 0) {
+      pushNotification({
+        kind: "approval_needed",
+        title: text.notificationApprovalNeededTitle,
+        body: `${projectDetail?.project.title ?? "Run"} · stage ${pendingGate}`,
+      });
+    } else if (runStatus === "completed") {
+      pushNotification({
+        kind: "run_complete",
+        title: text.notificationRunCompleteTitle,
+        body: projectDetail?.project.title ?? "Run completed",
+      });
+    } else if (runStatus === "failed") {
+      pushNotification({
+        kind: "run_failed",
+        title: text.notificationRunFailedTitle,
+        body: run.error || projectDetail?.project.title || "Run failed",
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runStatus, pendingGate]);
+
+  async function enableNotifications() {
+    if (typeof Notification === "undefined") {
+      setStatusMessage(text.notificationsUnsupported);
+      return;
+    }
+    if (Notification.permission === "granted") {
+      setNotificationPermission("granted");
+      setStatusMessage(text.notificationsEnabled);
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
+    if (permission === "granted") {
+      setStatusMessage(text.notificationsEnabled);
+    } else {
+      setStatusMessage(text.notificationsBlocked);
+    }
+  }
+
+  function clearNotifications() {
+    setNotifications([]);
+  }
 
   const selectedStage = useMemo(
     () => runStages.find((item) => item.stage_index === selectedStageIndex),
@@ -2191,6 +2383,13 @@ export default function App() {
           </div>
           <span>{statusMessage}</span>
           <span>{connectionMessage}</span>
+          <NotificationsTray
+            notifications={notifications}
+            permission={notificationPermission}
+            text={text}
+            onEnable={enableNotifications}
+            onClear={clearNotifications}
+          />
         </div>
       </section>
 
