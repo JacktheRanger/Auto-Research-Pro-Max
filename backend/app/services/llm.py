@@ -8,6 +8,88 @@ from ..stages import StageDefinition
 from .grounding import retrieve_paper_context_text
 
 
+# Approximate USD price per 1M input/output tokens for known models.
+# Values are best-effort defaults so the local UI can show a rough estimate
+# even when the provider response does not surface a price field.
+COST_TABLE: dict[str, dict[str, float]] = {
+    "gpt-5.4": {"input": 10.0, "output": 30.0},
+    "gpt-5.4-mini": {"input": 1.5, "output": 4.5},
+    "gpt-5": {"input": 5.0, "output": 15.0},
+    "gpt-4.1": {"input": 5.0, "output": 15.0},
+    "gpt-4.1-mini": {"input": 1.5, "output": 4.5},
+    "gpt-4o": {"input": 5.0, "output": 15.0},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.6},
+    "claude-opus-4-7": {"input": 15.0, "output": 75.0},
+    "claude-sonnet-4-6": {"input": 3.0, "output": 15.0},
+    "claude-haiku-4-5": {"input": 0.8, "output": 4.0},
+}
+
+DEFAULT_COST = {"input": 5.0, "output": 15.0}
+
+
+def _model_cost_rates(model: str) -> dict[str, float]:
+    if not model:
+        return DEFAULT_COST
+    if model in COST_TABLE:
+        return COST_TABLE[model]
+    lowered = model.lower()
+    for key, rates in COST_TABLE.items():
+        if lowered.startswith(key.lower()):
+            return rates
+    return DEFAULT_COST
+
+
+def _extract_usage(response: Any, model: str) -> dict[str, Any]:
+    usage_obj = getattr(response, "usage", None) or {}
+    if hasattr(usage_obj, "model_dump"):
+        try:
+            usage_obj = usage_obj.model_dump()
+        except Exception:
+            usage_obj = {}
+    if not isinstance(usage_obj, dict):
+        usage_obj = {}
+    input_tokens = int(
+        usage_obj.get("input_tokens")
+        or usage_obj.get("prompt_tokens")
+        or 0
+    )
+    output_tokens = int(
+        usage_obj.get("output_tokens")
+        or usage_obj.get("completion_tokens")
+        or 0
+    )
+    total_tokens = int(
+        usage_obj.get("total_tokens")
+        or (input_tokens + output_tokens)
+    )
+    rates = _model_cost_rates(model)
+    cost_usd = round(
+        (input_tokens / 1_000_000) * rates["input"]
+        + (output_tokens / 1_000_000) * rates["output"],
+        6,
+    )
+    return {
+        "model": model,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+        "cost_usd": cost_usd,
+        "rate_per_million": rates,
+    }
+
+
+def _empty_usage(model: str = "") -> dict[str, Any]:
+    rates = _model_cost_rates(model)
+    return {
+        "model": model,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "rate_per_million": rates,
+    }
+
+
 def _client(settings: dict[str, Any]) -> OpenAI | None:
     api_key = (settings.get("api_key") or "").strip()
     if not api_key:
@@ -325,11 +407,18 @@ def generate_plan_markdown(
         f"Stage catalog:\n{stage_catalog}\n\n"
         f"Project context:\n{context}"
     )
+    chosen_model = settings.get("research_model") or "gpt-5.4"
     response = client.responses.create(
-        model=settings.get("research_model") or "gpt-5.4",
+        model=chosen_model,
         input=prompt,
     )
-    return response.output_text.strip()
+    plan_text = response.output_text.strip()
+    setattr(generate_plan_markdown, "_last_usage", _extract_usage(response, chosen_model))
+    return plan_text
+
+
+def get_last_plan_usage() -> dict[str, Any] | None:
+    return getattr(generate_plan_markdown, "_last_usage", None)
 
 
 def generate_stage_result(
@@ -353,6 +442,7 @@ def generate_stage_result(
             "content_md": _fallback_stage_markdown(stage, project, papers, prior_outputs, artifacts),
             "artifacts": artifacts,
             "notes": f"{stage.label} completed in local fallback mode.",
+            "usage": _empty_usage(""),
         }
 
     model = settings.get("code_model") if stage.key in {"code_prototype"} else settings.get("research_model")
@@ -387,14 +477,16 @@ def generate_stage_result(
         f"Approved plan:\n{plan_markdown}\n\n"
         f"Previous stage outputs:\n{prior_text or 'None yet.'}\n"
     )
+    chosen_model = model or "gpt-5.4"
     response = client.responses.create(
-        model=model or "gpt-5.4",
+        model=chosen_model,
         input=prompt,
     )
     return {
         "content_md": _normalize_stage_markdown(stage, response.output_text),
         "artifacts": artifacts,
         "notes": f"{stage.label} completed with a stage-specific contract and deterministic schema-backed artifacts.",
+        "usage": _extract_usage(response, chosen_model),
     }
 
 

@@ -321,6 +321,13 @@ const uiCopy = {
     retryStageDisabled: "Stage cannot be retried while the run is busy.",
     retryQueued: "Stage retry queued.",
     retryAttempts: "Attempts",
+    costSummary: "Cost & Usage",
+    costTotalSpend: "Estimated spend",
+    costTotalTokens: "Total tokens",
+    costPerModel: "Per model",
+    costPerStage: "Per stage",
+    costNoUsage: "No model usage recorded yet.",
+    costUsageDisclaimer: "Estimate uses approximate per-million rates; verify with your provider.",
   },
   cn: {
     ready: "已就绪。",
@@ -531,6 +538,13 @@ const uiCopy = {
     retryStageDisabled: "运行繁忙时无法重试。",
     retryQueued: "阶段重试已排队。",
     retryAttempts: "尝试次数",
+    costSummary: "成本与用量",
+    costTotalSpend: "估算花费",
+    costTotalTokens: "Token 总量",
+    costPerModel: "按模型",
+    costPerStage: "按阶段",
+    costNoUsage: "暂无模型用量记录。",
+    costUsageDisclaimer: "估算基于大致的每百万 Token 价格，请与服务商账单核对。",
   },
 } satisfies Record<
   LocaleMode,
@@ -707,6 +721,119 @@ type PaperCardCopy = {
 type StageAttemptCopy = {
   retryAttempts: string;
 };
+
+type CostSummaryCopy = {
+  costSummary: string;
+  costTotalSpend: string;
+  costTotalTokens: string;
+  costPerModel: string;
+  costPerStage: string;
+  costNoUsage: string;
+  costUsageDisclaimer: string;
+};
+
+function formatTokens(value: number): string {
+  if (!Number.isFinite(value) || value === 0) {
+    return "0";
+  }
+  if (value < 1000) {
+    return value.toString();
+  }
+  if (value < 1_000_000) {
+    return `${(value / 1000).toFixed(1)}k`;
+  }
+  return `${(value / 1_000_000).toFixed(2)}M`;
+}
+
+function formatCost(value: number): string {
+  if (!Number.isFinite(value) || value === 0) {
+    return "$0.00";
+  }
+  if (value < 0.01) {
+    return `$${value.toFixed(4)}`;
+  }
+  return `$${value.toFixed(2)}`;
+}
+
+function CostSummaryPanel({ run, text }: { run: Run | null; text: CostSummaryCopy }) {
+  const summary = (run?.metadata_json as
+    | {
+        cost_summary?: {
+          totals?: {
+            input_tokens?: number;
+            output_tokens?: number;
+            total_tokens?: number;
+            cost_usd?: number;
+          };
+          per_model?: Record<
+            string,
+            { input_tokens?: number; output_tokens?: number; cost_usd?: number; calls?: number }
+          >;
+          per_stage?: Array<{
+            stage_index: number;
+            stage_key: string;
+            model: string;
+            total_tokens?: number;
+            cost_usd?: number;
+          }>;
+        };
+      }
+    | undefined)?.cost_summary;
+  const totals = summary?.totals;
+  const perModel = summary?.per_model ?? {};
+  const perStage = summary?.per_stage ?? [];
+  const hasUsage = Boolean(totals && (totals.total_tokens ?? 0) > 0);
+  return (
+    <div className="cost-panel">
+      <h3>{text.costSummary}</h3>
+      {!hasUsage ? (
+        <p className="muted">{text.costNoUsage}</p>
+      ) : (
+        <>
+          <div className="cost-grid">
+            <div>
+              <span className="metric-label">{text.costTotalSpend}</span>
+              <strong>{formatCost(totals?.cost_usd ?? 0)}</strong>
+            </div>
+            <div>
+              <span className="metric-label">{text.costTotalTokens}</span>
+              <strong>{formatTokens(totals?.total_tokens ?? 0)}</strong>
+            </div>
+          </div>
+          {Object.keys(perModel).length ? (
+            <details className="cost-details">
+              <summary>{text.costPerModel}</summary>
+              <ul>
+                {Object.entries(perModel).map(([model, info]) => (
+                  <li key={`model-${model}`}>
+                    <strong>{model}</strong> · {formatCost(info.cost_usd ?? 0)} ·
+                    {" "}
+                    {formatTokens((info.input_tokens ?? 0) + (info.output_tokens ?? 0))} tokens · {info.calls ?? 0} calls
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+          {perStage.length ? (
+            <details className="cost-details">
+              <summary>{text.costPerStage}</summary>
+              <ul>
+                {perStage.map((entry, index) => (
+                  <li key={`stage-${entry.stage_index}-${index}`}>
+                    #{entry.stage_index} {entry.stage_key} · {entry.model || "n/a"} ·
+                    {" "}
+                    {formatTokens(entry.total_tokens ?? 0)} tokens · {formatCost(entry.cost_usd ?? 0)}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+        </>
+      )}
+      <p className="muted cost-disclaimer">{text.costUsageDisclaimer}</p>
+    </div>
+  );
+}
 
 function StageAttemptList({
   stage,
@@ -2354,6 +2481,10 @@ export default function App() {
                   </p>
                 ) : null}
               </div>
+              <CostSummaryPanel
+                run={run}
+                text={text}
+              />
               <div className="audit-panel">
                 <h3>{text.approvalAudit}</h3>
                 {auditEvents.length === 0 ? (

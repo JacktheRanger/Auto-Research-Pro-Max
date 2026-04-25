@@ -788,6 +788,58 @@ textarea {
   color: var(--warning);
 }
 
+.cost-panel {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 0.95rem 1.1rem;
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.cost-panel h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.cost-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.55rem;
+}
+
+.cost-grid > div {
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 0.45rem 0.75rem;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.cost-details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.cost-details ul {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.cost-details li {
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.cost-disclaimer {
+  font-size: 0.75rem;
+}
+
 .json-surface {
   background: rgba(7, 21, 26, 0.06);
   border: 1px solid var(--line);
