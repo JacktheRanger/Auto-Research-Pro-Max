@@ -420,6 +420,15 @@ const uiCopy = {
     runDiffArtifacts: "Artifact diff",
     runDiffNoChanges: "No content or artifact changes detected.",
     runDiffError: "Failed to compute run diff:",
+    branchSection: "Hypothesis branches",
+    branchEmpty: "No sibling branches yet — use Create branch to fork the project for a competing hypothesis.",
+    branchCreate: "Create branch",
+    branchPromptLabel: "Branch label (e.g. hypothesis-A):",
+    branchCreated: "Branch created.",
+    branchCreateError: "Could not create branch:",
+    branchHistoryError: "Failed to load branches:",
+    branchOpen: "Open",
+    branchCurrent: "current",
   },
   cn: {
     ready: "已就绪。",
@@ -714,6 +723,15 @@ const uiCopy = {
     runDiffArtifacts: "产物 diff",
     runDiffNoChanges: "未检测到内容或产物变化。",
     runDiffError: "运行对比失败：",
+    branchSection: "假设分支",
+    branchEmpty: "还没有兄弟分支 — 使用“新建分支”来 fork 项目以对比另一组假设。",
+    branchCreate: "新建分支",
+    branchPromptLabel: "分支标签（如 hypothesis-A）：",
+    branchCreated: "分支已创建。",
+    branchCreateError: "新建分支失败：",
+    branchHistoryError: "加载分支失败：",
+    branchOpen: "打开",
+    branchCurrent: "当前",
   },
 } satisfies Record<
   LocaleMode,
@@ -946,6 +964,65 @@ type CitationGraphCopy = {
   citationGraphReferences: string;
   citationGraphCitedBy: string;
 };
+
+type BranchPanelCopy = {
+  branchSection: string;
+  branchEmpty: string;
+  branchCreate: string;
+  branchOpen: string;
+  branchCurrent: string;
+};
+
+function BranchPanel({
+  branches,
+  selectedProjectId,
+  onLoad,
+  onCreate,
+  text,
+}: {
+  branches: Project[];
+  selectedProjectId: string;
+  onLoad: (projectId: string) => void;
+  onCreate: () => void;
+  text: BranchPanelCopy;
+}) {
+  return (
+    <section className="panel branch-panel">
+      <div className="panel-header">
+        <h2>{text.branchSection}</h2>
+        <button type="button" className="secondary" onClick={onCreate} disabled={!selectedProjectId}>
+          {text.branchCreate}
+        </button>
+      </div>
+      {branches.length <= 1 ? (
+        <p className="muted">{text.branchEmpty}</p>
+      ) : (
+        <ul className="branch-list">
+          {branches.map((branch) => (
+            <li
+              key={branch.id}
+              className={`branch-row ${branch.id === selectedProjectId ? "current" : ""}`}
+            >
+              <div>
+                <strong>{branch.title}</strong>
+                <span className="muted">
+                  {branch.branch_label || (branch.parent_project_id ? "branch" : "root")}
+                </span>
+              </div>
+              {branch.id === selectedProjectId ? (
+                <span className="branch-pill">{text.branchCurrent}</span>
+              ) : (
+                <button type="button" onClick={() => onLoad(branch.id)}>
+                  {text.branchOpen}
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
 
 type RunHistoryCopy = {
   runHistory: string;
@@ -2090,6 +2167,7 @@ export default function App() {
   const [projectRuns, setProjectRuns] = useState<Run[]>([]);
   const [diffAgainstRunId, setDiffAgainstRunId] = useState("");
   const [runDiff, setRunDiff] = useState<RunDiff | null>(null);
+  const [projectBranches, setProjectBranches] = useState<Project[]>([]);
   const [notifications, setNotifications] = useState<NotificationEntry[]>([]);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">(
     typeof Notification === "undefined" ? "unsupported" : Notification.permission,
@@ -2177,6 +2255,41 @@ export default function App() {
   async function refreshProjects() {
     const response = await api.listProjects();
     setProjects(response.projects);
+  }
+
+  async function refreshProjectBranches(projectId: string | null) {
+    if (!projectId) {
+      setProjectBranches([]);
+      return;
+    }
+    try {
+      const response = await api.listProjectBranches(projectId);
+      setProjectBranches(response.branches);
+    } catch (error) {
+      setStatusMessage(`${text.branchHistoryError} ${(error as Error).message ?? ""}`);
+    }
+  }
+
+  async function handleCreateBranch() {
+    if (!selectedProjectId) {
+      return;
+    }
+    if (typeof window === "undefined") {
+      return;
+    }
+    const label = window.prompt(text.branchPromptLabel, "")?.trim() ?? "";
+    if (!label) {
+      return;
+    }
+    try {
+      const response = await api.branchProject(selectedProjectId, label);
+      setProjects(response.projects);
+      setProjectBranches(response.branches);
+      setStatusMessage(text.branchCreated);
+      await loadProject(response.project.id);
+    } catch (error) {
+      setStatusMessage(`${text.branchCreateError} ${(error as Error).message ?? ""}`);
+    }
   }
 
   async function refreshProjectRuns(projectId: string | null) {
@@ -2322,6 +2435,7 @@ export default function App() {
     setRun(detail.latest_run);
     void refreshCitationGraph(projectId);
     void refreshProjectRuns(projectId);
+    void refreshProjectBranches(projectId);
     setRunDiff(null);
     setDiffAgainstRunId("");
     setSelectedStageIndex(detail.latest_run?.current_stage_index || 1);
@@ -3578,6 +3692,14 @@ export default function App() {
             onLoadRun={(runId) => void handleLoadHistoricalRun(runId)}
             onComputeDiff={() => void handleComputeDiff()}
             diff={runDiff}
+            text={text}
+          />
+
+          <BranchPanel
+            branches={projectBranches}
+            selectedProjectId={selectedProjectId}
+            onLoad={(projectId) => void loadProject(projectId)}
+            onCreate={() => void handleCreateBranch()}
             text={text}
           />
 

@@ -22,6 +22,7 @@ from .db import (
     get_run,
     init_db,
     list_papers,
+    list_project_branches,
     list_project_runs,
     list_projects,
     list_run_audit_events,
@@ -280,6 +281,33 @@ async def projects_duplicate(project_id: str, payload: ProjectDuplicatePayload |
     if duplicated is None:
         raise HTTPException(status_code=500, detail="Failed to duplicate project")
     return {"project": duplicated, "projects": list_projects()}
+
+
+class ProjectBranchPayload(BaseModel):
+    branch_label: str
+    title: str = ""
+
+
+@app.post("/api/projects/{project_id}/branch")
+async def projects_branch(project_id: str, payload: ProjectBranchPayload) -> dict[str, Any]:
+    project = get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    label = payload.branch_label.strip()
+    if not label:
+        raise HTTPException(status_code=400, detail="branch_label is required")
+    branch = duplicate_project(project_id, payload.title, branch_label=label)
+    if branch is None:
+        raise HTTPException(status_code=500, detail="Failed to create branch")
+    return {"project": branch, "projects": list_projects(), "branches": list_project_branches(branch["id"])}
+
+
+@app.get("/api/projects/{project_id}/branches")
+async def projects_branches(project_id: str) -> dict[str, Any]:
+    project = get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"branches": list_project_branches(project_id)}
 
 
 @app.post("/api/projects/{project_id}/archive")

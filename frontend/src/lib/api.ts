@@ -30,6 +30,8 @@ export type Project = {
   updated_at: string;
   archived_at?: string;
   duplicated_from?: string;
+  branch_label?: string;
+  parent_project_id?: string;
   sandbox_base_image?: string;
   sandbox_extra_packages?: string[];
   sandbox_apt_packages?: string[];
@@ -411,6 +413,16 @@ export const api = {
         body: JSON.stringify({ title }),
       },
     ),
+  branchProject: (projectId: string, branchLabel: string, title = "") =>
+    request<{ project: Project; projects: Project[]; branches: Project[] }>(
+      `/api/projects/${projectId}/branch`,
+      {
+        method: "POST",
+        body: JSON.stringify({ branch_label: branchLabel, title }),
+      },
+    ),
+  listProjectBranches: (projectId: string) =>
+    request<{ branches: Project[] }>(`/api/projects/${projectId}/branches`),
   archiveProject: (projectId: string) =>
     request<{ project: Project; projects: Project[] }>(
       `/api/projects/${projectId}/archive`,

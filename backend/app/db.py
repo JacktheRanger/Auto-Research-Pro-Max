@@ -280,6 +280,8 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         ("sandbox_max_attempts", "INTEGER NOT NULL DEFAULT 0"),
         ("sandbox_apt_packages", "TEXT NOT NULL DEFAULT '[]'"),
         ("disabled_stage_keys", "TEXT NOT NULL DEFAULT '[]'"),
+        ("branch_label", "TEXT NOT NULL DEFAULT ''"),
+        ("parent_project_id", "TEXT NOT NULL DEFAULT ''"),
     ):
         _ensure_column(conn, "projects", name, definition)
 
@@ -528,13 +530,22 @@ def set_project_archived(project_id: str, archived: bool) -> dict[str, Any] | No
     return get_project(project_id)
 
 
-def duplicate_project(project_id: str, new_title: str | None = None) -> dict[str, Any] | None:
+def duplicate_project(
+    project_id: str,
+    new_title: str | None = None,
+    *,
+    branch_label: str = "",
+) -> dict[str, Any] | None:
     source = get_project(project_id)
     if source is None:
         return None
     new_id = f"proj_{uuid.uuid4().hex[:10]}"
     now = utc_now()
-    title = (new_title or "").strip() or f"{source['title']} (Copy)"
+    branch = (branch_label or "").strip()
+    if branch:
+        title = (new_title or "").strip() or f"{source['title']} ({branch})"
+    else:
+        title = (new_title or "").strip() or f"{source['title']} (Copy)"
     payload = {
         "id": new_id,
         "title": title,
@@ -553,6 +564,7 @@ def duplicate_project(project_id: str, new_title: str | None = None) -> dict[str
         "sandbox_run_command": source.get("sandbox_run_command", ""),
         "expected_artifacts": _json_dump(source.get("expected_artifacts") or []),
     }
+    parent_root = source.get("parent_project_id") or source["id"]
     with _LOCK, _connect() as conn:
         conn.execute(
             """
@@ -560,8 +572,9 @@ def duplicate_project(project_id: str, new_title: str | None = None) -> dict[str
                 id, title, idea, background, direction, goals, constraints_text,
                 compute_budget, api_budget, repo_path, repo_url, repo_ref,
                 sandbox_workdir, sandbox_setup_command, sandbox_run_command,
-                expected_artifacts, status, created_at, updated_at, archived_at, duplicated_from
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                expected_artifacts, status, created_at, updated_at, archived_at,
+                duplicated_from, branch_label, parent_project_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 payload["id"],
@@ -585,10 +598,37 @@ def duplicate_project(project_id: str, new_title: str | None = None) -> dict[str
                 now,
                 "",
                 project_id,
+                branch,
+                parent_root if branch else "",
             ),
         )
         conn.commit()
     return get_project(new_id)
+
+
+def list_project_branches(project_id: str) -> list[dict[str, Any]]:
+    project = get_project(project_id)
+    if project is None:
+        return []
+    root_id = project.get("parent_project_id") or project["id"]
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM projects
+            WHERE id = ? OR parent_project_id = ? OR id = ?
+            ORDER BY created_at ASC
+            """,
+            (root_id, root_id, project["id"]),
+        ).fetchall()
+    seen: set[str] = set()
+    branches: list[dict[str, Any]] = []
+    for row in rows:
+        payload = _to_dict(row)
+        if payload is None or payload["id"] in seen:
+            continue
+        seen.add(payload["id"])
+        branches.append(payload)
+    return branches
 
 
 def delete_project(project_id: str) -> bool:

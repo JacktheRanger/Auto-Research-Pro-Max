@@ -1269,6 +1269,49 @@ textarea {
   overflow-x: auto;
 }
 
+.branch-panel {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.branch-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.branch-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 0.45rem 0.7rem;
+  gap: 0.5rem;
+}
+
+.branch-row.current {
+  border-color: var(--mint);
+  background: rgba(30, 143, 122, 0.08);
+}
+
+.branch-row > div {
+  display: grid;
+}
+
+.branch-pill {
+  padding: 0.18rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(30, 143, 122, 0.18);
+  color: var(--mint);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .json-surface {
   background: rgba(7, 21, 26, 0.06);
   border: 1px solid var(--line);
