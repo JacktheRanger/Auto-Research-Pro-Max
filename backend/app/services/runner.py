@@ -366,7 +366,9 @@ async def execute_run(run_id: str, settings: dict[str, Any]) -> None:
 
             next_stage_index = _next_stage_index(run_id)
             if next_stage_index is None:
-                update_run(run_id, status="completed", current_stage_index=STAGE_COUNT, finished=True)
+                run_record = get_run(run_id) or run
+                final_index = int(run_record.get("total_stages") or STAGE_COUNT)
+                update_run(run_id, status="completed", current_stage_index=final_index, finished=True)
                 set_project_run_complete(run["project_id"], "completed")
                 append_run_event(run_id, {"action": "completed"})
                 await _emit(run_id)

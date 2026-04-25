@@ -399,6 +399,14 @@ const uiCopy = {
     reindexResult:
       "Indexed {indexed} papers, skipped {skipped} unchanged, {embedded} embedded out of {total}.",
     reindexError: "Re-index failed:",
+    stageConfigTitle: "Per-project stage list",
+    stageConfigHint:
+      "Disable stages that do not apply to this project. Approval gates remain effective only for stages that stay enabled.",
+    stageConfigSave: "Save stage list",
+    stageConfigSaved: "Stage list updated. The change applies to the next run.",
+    stageConfigError: "Could not save stage list:",
+    stageConfigDisableLabel: "Skip this stage",
+    stageConfigEnableAll: "Enable all stages",
   },
   cn: {
     ready: "已就绪。",
@@ -674,6 +682,13 @@ const uiCopy = {
     reindexFull: "强制完整重建",
     reindexResult: "已重建 {indexed} 篇，跳过未变化 {skipped} 篇，共 {embedded}/{total} 篇有 embedding。",
     reindexError: "重建索引失败：",
+    stageConfigTitle: "项目级阶段配置",
+    stageConfigHint: "可以禁用对当前项目不适用的阶段；仅启用的阶段会保留审批门控。",
+    stageConfigSave: "保存阶段列表",
+    stageConfigSaved: "阶段列表已更新，将在下次运行生效。",
+    stageConfigError: "保存阶段列表失败：",
+    stageConfigDisableLabel: "跳过该阶段",
+    stageConfigEnableAll: "启用全部阶段",
   },
 } satisfies Record<
   LocaleMode,
@@ -906,6 +921,87 @@ type CitationGraphCopy = {
   citationGraphReferences: string;
   citationGraphCitedBy: string;
 };
+
+type StageConfigCopy = {
+  stageConfigTitle: string;
+  stageConfigHint: string;
+  stageConfigSave: string;
+  stageConfigSaved: string;
+  stageConfigError: string;
+  stageConfigDisableLabel: string;
+  stageConfigEnableAll: string;
+};
+
+function StageConfigEditor({
+  catalog,
+  disabled,
+  text,
+  onSave,
+  disabledControls,
+}: {
+  catalog: StageCatalogItem[];
+  disabled: string[];
+  text: StageConfigCopy;
+  onSave: (keys: string[]) => void;
+  disabledControls: boolean;
+}) {
+  const [draft, setDraft] = useState<string[]>(disabled);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    setDraft(disabled);
+  }, [disabled.join(","), open]);
+  const dirty = draft.slice().sort().join(",") !== disabled.slice().sort().join(",");
+  return (
+    <details className="stage-config" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary>{text.stageConfigTitle}</summary>
+      <p className="muted">{text.stageConfigHint}</p>
+      <div className="stage-config-grid">
+        {catalog.map((stage) => {
+          const isDisabled = draft.includes(stage.key);
+          return (
+            <label key={stage.key} className={`stage-config-row ${isDisabled ? "is-disabled" : ""}`}>
+              <input
+                type="checkbox"
+                checked={!isDisabled}
+                onChange={(event) => {
+                  setDraft((current) => {
+                    if (event.target.checked) {
+                      return current.filter((key) => key !== stage.key);
+                    }
+                    return current.includes(stage.key) ? current : [...current, stage.key];
+                  });
+                }}
+              />
+              <span>
+                <strong>
+                  {stage.index}. {stage.label}
+                </strong>
+                <span className="muted">{stage.summary}</span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+      <div className="inline-actions">
+        <button
+          type="button"
+          disabled={disabledControls || !dirty}
+          onClick={() => onSave(draft)}
+        >
+          {text.stageConfigSave}
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          disabled={disabledControls || draft.length === 0}
+          onClick={() => onSave([])}
+        >
+          {text.stageConfigEnableAll}
+        </button>
+      </div>
+    </details>
+  );
+}
 
 function CitationGraphPanel({
   graph,
@@ -1930,6 +2026,19 @@ export default function App() {
   async function refreshProjects() {
     const response = await api.listProjects();
     setProjects(response.projects);
+  }
+
+  async function handleSaveStageConfig(disabledStageKeys: string[]) {
+    if (!selectedProjectId) {
+      return;
+    }
+    try {
+      const result = await api.updateProjectStageConfig(selectedProjectId, disabledStageKeys);
+      setProjectDetail((current) => (current ? { ...current, project: result.project } : current));
+      setStatusMessage(text.stageConfigSaved);
+    } catch (error) {
+      setStatusMessage(`${text.stageConfigError} ${(error as Error).message ?? ""}`);
+    }
   }
 
   async function handleReindexProject(force: boolean) {
@@ -3273,8 +3382,17 @@ export default function App() {
             <div className="panel-header">
               <h2>{text.pipelineStages}</h2>
             </div>
-            <StageTimeline
+            <StageConfigEditor
               catalog={localizedStageCatalog}
+              disabled={projectDetail?.project.disabled_stage_keys ?? []}
+              text={text}
+              onSave={(keys) => void handleSaveStageConfig(keys)}
+              disabledControls={!selectedProjectId}
+            />
+            <StageTimeline
+              catalog={localizedStageCatalog.filter(
+                (stage) => !(projectDetail?.project.disabled_stage_keys ?? []).includes(stage.key),
+              )}
               locale={locale}
               runStages={runStages}
               currentStage={run?.pending_gate_index || run?.current_stage_index || 0}

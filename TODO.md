@@ -9,7 +9,6 @@
 ## Workflow
 
 - Add optional branching to compare multiple hypotheses.
-- Allow the user to customize the current stage count and stage list per project.
 
 ## Product
 

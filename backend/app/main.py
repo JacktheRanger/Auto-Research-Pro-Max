@@ -30,6 +30,7 @@ from .db import (
     create_project,
     get_settings,
     set_project_archived,
+    update_project_disabled_stages,
     update_project_execution_config,
 )
 from .services.citation_graph import build_citation_graph
@@ -251,6 +252,21 @@ async def projects_update_execution_config(project_id: str, payload: ProjectExec
 
 class ProjectDuplicatePayload(BaseModel):
     title: str = ""
+
+
+class StageConfigPayload(BaseModel):
+    disabled_stage_keys: list[str] = Field(default_factory=list)
+
+
+@app.put("/api/projects/{project_id}/stage-config")
+async def projects_update_stage_config(project_id: str, payload: StageConfigPayload) -> dict[str, Any]:
+    project = get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    updated = update_project_disabled_stages(project_id, payload.disabled_stage_keys)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"project": updated}
 
 
 @app.post("/api/projects/{project_id}/duplicate")
