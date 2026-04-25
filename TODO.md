@@ -8,7 +8,6 @@
 
 ## Workflow
 
-- Add optional branching to compare multiple hypotheses.
 
 ## Product
 
