@@ -8,6 +8,7 @@
   <a href="https://jacktheranger.github.io/Auto-Research-Pro-Max">
     <img src="https://img.shields.io/badge/Official_Website-%E5%AE%98%E6%96%B9%E4%B8%BB%E9%A1%B5-blue?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Website" />
   </a>
+  <img src="https://img.shields.io/badge/-Research%20Preview-c0392b?style=for-the-badge" alt="Research Preview" />
 </p>
 
 <p align="center">
