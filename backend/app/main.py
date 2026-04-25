@@ -19,6 +19,7 @@ from .db import (
     init_db,
     list_papers,
     list_projects,
+    list_run_audit_events,
     list_run_stages,
     save_plan,
     save_settings,
@@ -102,6 +103,11 @@ class LiteratureImportPayload(BaseModel):
 class GroundedSearchPayload(BaseModel):
     query: str = Field(min_length=2)
     limit: int = Field(default=6, ge=1, le=12)
+
+
+class RunControlPayload(BaseModel):
+    comment: str = ""
+    decided_by: str = ""
 
 
 app = FastAPI(title="Auto Research Pro Max", version="0.2.0")
@@ -306,33 +312,53 @@ async def run_get(run_id: str) -> dict[str, Any]:
     run = get_run(run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
-    return {"run": run, "stages": list_run_stages(run_id)}
+    return {
+        "run": run,
+        "stages": list_run_stages(run_id),
+        "audit_events": list_run_audit_events(run_id),
+    }
+
+
+@app.get("/api/runs/{run_id}/audit")
+async def run_audit(run_id: str) -> dict[str, Any]:
+    run = get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return {"run_id": run_id, "audit_events": list_run_audit_events(run_id)}
 
 
 def _controlled_run_response(run_id: str, updated_run: dict[str, Any] | None) -> dict[str, Any]:
     if updated_run is None:
         raise HTTPException(status_code=404, detail="Run not found")
-    return {"run": updated_run, "stages": list_run_stages(run_id)}
+    return {
+        "run": updated_run,
+        "stages": list_run_stages(run_id),
+        "audit_events": list_run_audit_events(run_id),
+    }
 
 
 @app.post("/api/runs/{run_id}/control/pause")
-async def run_pause(run_id: str) -> dict[str, Any]:
-    return _controlled_run_response(run_id, pause_run(run_id))
+async def run_pause(run_id: str, payload: RunControlPayload | None = None) -> dict[str, Any]:
+    args = (payload or RunControlPayload()).model_dump()
+    return _controlled_run_response(run_id, pause_run(run_id, **args))
 
 
 @app.post("/api/runs/{run_id}/control/resume")
-async def run_resume(run_id: str) -> dict[str, Any]:
-    return _controlled_run_response(run_id, resume_run(run_id))
+async def run_resume(run_id: str, payload: RunControlPayload | None = None) -> dict[str, Any]:
+    args = (payload or RunControlPayload()).model_dump()
+    return _controlled_run_response(run_id, resume_run(run_id, **args))
 
 
 @app.post("/api/runs/{run_id}/control/reject")
-async def run_reject(run_id: str) -> dict[str, Any]:
-    return _controlled_run_response(run_id, reject_run(run_id))
+async def run_reject(run_id: str, payload: RunControlPayload | None = None) -> dict[str, Any]:
+    args = (payload or RunControlPayload()).model_dump()
+    return _controlled_run_response(run_id, reject_run(run_id, **args))
 
 
 @app.post("/api/runs/{run_id}/control/rollback")
-async def run_rollback(run_id: str) -> dict[str, Any]:
-    return _controlled_run_response(run_id, rollback_run(run_id))
+async def run_rollback(run_id: str, payload: RunControlPayload | None = None) -> dict[str, Any]:
+    args = (payload or RunControlPayload()).model_dump()
+    return _controlled_run_response(run_id, rollback_run(run_id, **args))
 
 
 @app.websocket("/ws/runs/{run_id}")
@@ -346,6 +372,7 @@ async def run_events(run_id: str, websocket: WebSocket) -> None:
                     "type": "run_update",
                     "run": run,
                     "stages": list_run_stages(run_id),
+                    "audit_events": list_run_audit_events(run_id),
                 }
             )
         while True:

@@ -4,6 +4,7 @@ import asyncio
 from typing import Any, Literal
 
 from ..db import (
+    append_run_audit_event,
     append_run_event,
     create_run,
     get_latest_run,
@@ -12,6 +13,7 @@ from ..db import (
     get_run,
     get_run_stage,
     list_papers,
+    list_run_audit_events,
     list_run_stages,
     reset_run_from_stage,
     set_project_run_complete,
@@ -19,6 +21,7 @@ from ..db import (
     update_run,
     update_run_status,
     update_stage,
+    update_stage_gate_decision,
 )
 from ..stages import PIPELINE_STAGES, STAGE_COUNT, StageDefinition, stage_by_index
 from .events import event_hub
@@ -58,6 +61,7 @@ async def _emit(run_id: str) -> None:
             "type": "run_update",
             "run": run,
             "stages": list_run_stages(run_id),
+            "audit_events": list_run_audit_events(run_id),
         },
     )
 
@@ -234,11 +238,15 @@ async def _wait_for_gate_decision(run_id: str, stage: StageDefinition) -> Litera
             continue
         gate_state = run.get("pending_gate_state") or ""
         if gate_state == "approved":
+            stage_record = get_run_stage(run_id, stage.index) or {}
+            decided_by = stage_record.get("gate_decided_by") or ""
+            gate_comment = stage_record.get("gate_comment") or ""
+            note_suffix = f" Comment: {gate_comment}" if gate_comment else ""
             update_stage(
                 run_id,
                 stage.index,
                 gate_status="approved",
-                notes=f"{stage.label} gate approved. Workflow resumed.",
+                notes=f"{stage.label} gate approved. Workflow resumed.{note_suffix}",
             )
             update_run(
                 run_id,
@@ -248,7 +256,15 @@ async def _wait_for_gate_decision(run_id: str, stage: StageDefinition) -> Litera
                 pending_gate_state="",
                 error="",
             )
-            append_run_event(run_id, {"action": "resume", "stage_index": stage.index})
+            append_run_event(
+                run_id,
+                {
+                    "action": "resume",
+                    "stage_index": stage.index,
+                    "decided_by": decided_by,
+                    "comment": gate_comment,
+                },
+            )
             await _emit(run_id)
             return "approved"
         if run.get("current_stage_index", 0) < stage.index:
@@ -444,58 +460,130 @@ def start_run(project_id: str, settings: dict[str, Any]) -> dict[str, Any]:
     return created
 
 
-def pause_run(run_id: str) -> dict[str, Any] | None:
+def _stage_context_for_gate(run_id: str, run: dict[str, Any]) -> tuple[int, str, str]:
+    pending_index = int(run.get("pending_gate_index") or 0)
+    if not pending_index:
+        return 0, "", ""
+    stage_record = get_run_stage(run_id, pending_index) or {}
+    return (
+        pending_index,
+        str(stage_record.get("stage_key") or run.get("pending_gate_key") or ""),
+        str(stage_record.get("approval_label") or ""),
+    )
+
+
+def pause_run(run_id: str, *, comment: str = "", decided_by: str = "") -> dict[str, Any] | None:
     run = get_run(run_id)
     if run is None or run["status"] in {"completed", "failed"}:
         return run
     update_run(run_id, status="paused")
     update_project_status(run["project_id"], "paused")
-    append_run_event(run_id, {"action": "pause", "stage_index": run.get("current_stage_index", 0)})
+    stage_index = int(run.get("current_stage_index") or 0)
+    stage_record = get_run_stage(run_id, stage_index) if stage_index else None
+    stage_key = (stage_record or {}).get("stage_key") if stage_record else ""
+    append_run_event(
+        run_id,
+        {
+            "action": "pause",
+            "stage_index": stage_index,
+            "decided_by": decided_by or "",
+            "comment": comment or "",
+        },
+    )
+    append_run_audit_event(
+        run_id,
+        action="pause",
+        stage_index=stage_index,
+        stage_key=stage_key or "",
+        decided_by=decided_by,
+        comment=comment,
+    )
     _wake_run(run_id)
     return get_run(run_id)
 
 
-def resume_run(run_id: str) -> dict[str, Any] | None:
+def resume_run(run_id: str, *, comment: str = "", decided_by: str = "") -> dict[str, Any] | None:
     run = get_run(run_id)
     if run is None or run["status"] in {"completed", "failed"}:
         return run
-    if run.get("pending_gate_index"):
+    pending_index, gate_key, _ = _stage_context_for_gate(run_id, run)
+    audit_action = "resume"
+    if pending_index:
+        update_stage_gate_decision(run_id, pending_index, decided_by=decided_by, comment=comment)
         update_run(run_id, status="running", pending_gate_state="approved")
-        stage_index = int(run["pending_gate_index"])
-        update_stage(run_id, stage_index, gate_status="approved")
+        update_stage(run_id, pending_index, gate_status="approved")
+        audit_action = "approve"
     else:
         update_run(run_id, status="running")
     update_project_status(run["project_id"], "running")
-    append_run_event(run_id, {"action": "resume", "stage_index": run.get("current_stage_index", 0)})
+    stage_index = pending_index or int(run.get("current_stage_index") or 0)
+    append_run_event(
+        run_id,
+        {
+            "action": audit_action,
+            "stage_index": stage_index,
+            "decided_by": decided_by or "",
+            "comment": comment or "",
+        },
+    )
+    append_run_audit_event(
+        run_id,
+        action=audit_action,
+        stage_index=stage_index,
+        stage_key=gate_key,
+        gate_key=gate_key if pending_index else "",
+        decided_by=decided_by,
+        comment=comment,
+    )
     _wake_run(run_id)
     return get_run(run_id)
 
 
-def reject_run(run_id: str) -> dict[str, Any] | None:
+def reject_run(run_id: str, *, comment: str = "", decided_by: str = "") -> dict[str, Any] | None:
     run = get_run(run_id)
     if run is None or not run.get("pending_gate_index"):
         return run
-    stage_index = int(run["pending_gate_index"])
+    pending_index, gate_key, _ = _stage_context_for_gate(run_id, run)
+    note_suffix = f" Comment: {comment}" if comment else ""
+    update_stage_gate_decision(run_id, pending_index, decided_by=decided_by, comment=comment)
     update_run(run_id, status="awaiting_approval", pending_gate_state="rejected")
     update_stage(
         run_id,
-        stage_index,
+        pending_index,
         gate_status="rejected",
-        notes="Approval gate rejected. Roll back or resume after review.",
+        notes=f"Approval gate rejected. Roll back or resume after review.{note_suffix}",
     )
     update_project_status(run["project_id"], "awaiting_approval")
-    append_run_event(run_id, {"action": "reject", "stage_index": stage_index})
+    append_run_event(
+        run_id,
+        {
+            "action": "reject",
+            "stage_index": pending_index,
+            "decided_by": decided_by or "",
+            "comment": comment or "",
+        },
+    )
+    append_run_audit_event(
+        run_id,
+        action="reject",
+        stage_index=pending_index,
+        stage_key=gate_key,
+        gate_key=gate_key,
+        decided_by=decided_by,
+        comment=comment,
+    )
     _wake_run(run_id)
     return get_run(run_id)
 
 
-def rollback_run(run_id: str) -> dict[str, Any] | None:
+def rollback_run(run_id: str, *, comment: str = "", decided_by: str = "") -> dict[str, Any] | None:
     run = get_run(run_id)
     if run is None or not run.get("pending_gate_index"):
         return run
-    stage_index = int(run["pending_gate_index"])
-    stage_record = get_run_stage(run_id, stage_index)
-    rollback_to = int((stage_record or {}).get("rollback_target_index") or max(stage_index - 1, 1))
+    pending_index, gate_key, _ = _stage_context_for_gate(run_id, run)
+    stage_record = get_run_stage(run_id, pending_index)
+    rollback_to = int((stage_record or {}).get("rollback_target_index") or max(pending_index - 1, 1))
+    update_stage_gate_decision(run_id, pending_index, decided_by=decided_by, comment=comment)
     reset_run_from_stage(run_id, rollback_to)
     update_run(
         run_id,
@@ -508,6 +596,25 @@ def rollback_run(run_id: str) -> dict[str, Any] | None:
         finished=False,
     )
     update_project_status(run["project_id"], "paused")
-    append_run_event(run_id, {"action": "rollback", "from_stage_index": stage_index, "to_stage_index": rollback_to})
+    append_run_event(
+        run_id,
+        {
+            "action": "rollback",
+            "from_stage_index": pending_index,
+            "to_stage_index": rollback_to,
+            "decided_by": decided_by or "",
+            "comment": comment or "",
+        },
+    )
+    append_run_audit_event(
+        run_id,
+        action="rollback",
+        stage_index=pending_index,
+        stage_key=gate_key,
+        gate_key=gate_key,
+        decided_by=decided_by,
+        comment=comment,
+        metadata={"rollback_to_stage_index": rollback_to},
+    )
     _wake_run(run_id)
     return get_run(run_id)

@@ -28,6 +28,7 @@ _JSON_DEFAULTS: dict[str, Any] = {
     "content_json": {},
     "embedding_json": [],
     "expected_artifacts": [],
+    "audit_metadata_json": {},
 }
 
 
@@ -239,6 +240,23 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             PRIMARY KEY (run_id, stage_index),
             FOREIGN KEY (run_id) REFERENCES runs(id) ON DELETE CASCADE
         );
+
+        CREATE TABLE IF NOT EXISTS run_audit_events (
+            id TEXT PRIMARY KEY,
+            run_id TEXT NOT NULL,
+            stage_index INTEGER NOT NULL DEFAULT 0,
+            stage_key TEXT NOT NULL DEFAULT '',
+            gate_key TEXT NOT NULL DEFAULT '',
+            action TEXT NOT NULL,
+            decided_by TEXT NOT NULL DEFAULT '',
+            comment TEXT NOT NULL DEFAULT '',
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (run_id) REFERENCES runs(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_run_audit_events_run ON run_audit_events(run_id);
+        CREATE INDEX IF NOT EXISTS idx_run_audit_events_stage ON run_audit_events(run_id, stage_index);
         """
     )
 
@@ -291,6 +309,9 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         ("rollback_target_index", "INTEGER NOT NULL DEFAULT 0"),
         ("error", "TEXT NOT NULL DEFAULT ''"),
         ("metadata_json", "TEXT NOT NULL DEFAULT '{}'"),
+        ("gate_decided_by", "TEXT NOT NULL DEFAULT ''"),
+        ("gate_comment", "TEXT NOT NULL DEFAULT ''"),
+        ("gate_decided_at", "TEXT NOT NULL DEFAULT ''"),
     ):
         _ensure_column(conn, "run_stages", name, definition)
 
@@ -1021,7 +1042,10 @@ def reset_run_from_stage(run_id: str, from_stage_index: int) -> None:
                 artifact_json = '{}',
                 gate_status = '',
                 error = '',
-                metadata_json = '{}'
+                metadata_json = '{}',
+                gate_decided_by = '',
+                gate_comment = '',
+                gate_decided_at = ''
             WHERE run_id = ? AND stage_index >= ?
             """,
             (run_id, from_stage_index),
@@ -1040,3 +1064,90 @@ def append_run_event(run_id: str, event: dict[str, Any]) -> None:
     events.append(event)
     metadata["events"] = events[-40:]
     update_run(run_id, metadata_json=metadata)
+
+
+def append_run_audit_event(
+    run_id: str,
+    *,
+    action: str,
+    stage_index: int = 0,
+    stage_key: str = "",
+    gate_key: str = "",
+    decided_by: str = "",
+    comment: str = "",
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    event_id = f"audit_{uuid.uuid4().hex[:12]}"
+    created_at = utc_now()
+    payload = {
+        "id": event_id,
+        "run_id": run_id,
+        "stage_index": int(stage_index or 0),
+        "stage_key": stage_key or "",
+        "gate_key": gate_key or "",
+        "action": action,
+        "decided_by": decided_by or "",
+        "comment": comment or "",
+        "metadata_json": metadata or {},
+        "created_at": created_at,
+    }
+    with _LOCK, _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO run_audit_events (
+                id, run_id, stage_index, stage_key, gate_key, action,
+                decided_by, comment, metadata_json, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event_id,
+                run_id,
+                payload["stage_index"],
+                payload["stage_key"],
+                payload["gate_key"],
+                action,
+                payload["decided_by"],
+                payload["comment"],
+                _json_dump(payload["metadata_json"]),
+                created_at,
+            ),
+        )
+        conn.commit()
+    return payload
+
+
+def list_run_audit_events(run_id: str) -> list[dict[str, Any]]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM run_audit_events WHERE run_id = ? ORDER BY created_at ASC, id ASC",
+            (run_id,),
+        ).fetchall()
+    return [_to_dict(row) for row in rows if row is not None]
+
+
+def update_stage_gate_decision(
+    run_id: str,
+    stage_index: int,
+    *,
+    decided_by: str = "",
+    comment: str = "",
+    decided_at: str | None = None,
+) -> None:
+    with _LOCK, _connect() as conn:
+        conn.execute(
+            """
+            UPDATE run_stages
+            SET gate_decided_by = ?,
+                gate_comment = ?,
+                gate_decided_at = ?
+            WHERE run_id = ? AND stage_index = ?
+            """,
+            (
+                decided_by or "",
+                comment or "",
+                decided_at if decided_at is not None else utc_now(),
+                run_id,
+                stage_index,
+            ),
+        )
+        conn.commit()
