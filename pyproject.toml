@@ -17,6 +17,11 @@ dependencies = [
 
 [project.optional-dependencies]
 ocr = ["pytesseract>=0.3.10", "Pillow>=10.0.0"]
+dev = ["pytest>=8.0.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["tests/fixtures"]
 
 [build-system]
 requires = ["setuptools>=68.0"]
