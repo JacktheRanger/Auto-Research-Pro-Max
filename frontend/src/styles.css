@@ -208,6 +208,44 @@ textarea {
   resize: vertical;
 }
 
+/* File input — restyle the native button to match the project secondary style.
+   Uses line-height + vertical-align (not flex) because <input> is a replaced
+   element and its inner layout is browser-controlled. */
+input[type="file"] {
+  cursor: pointer;
+  font-size: 0.84rem;
+  height: 2.55rem;
+  line-height: 2.45rem;
+  padding: 0 0.55rem;
+}
+
+input[type="file"]::file-selector-button {
+  background: var(--secondary-bg);
+  border: 0;
+  border-radius: 8px;
+  color: var(--secondary-text);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  height: 1.9rem;
+  letter-spacing: -0.005em;
+  line-height: 1.9rem;
+  margin: 0 0.7rem 0 0;
+  padding: 0 0.85rem;
+  transition: background 120ms ease, transform 120ms ease;
+  vertical-align: middle;
+}
+
+input[type="file"]::file-selector-button:hover {
+  background: var(--secondary-bg-hover);
+  transform: translateY(-1px);
+}
+
+input[type="file"]::file-selector-button:active {
+  transform: translateY(0);
+}
+
 .page-shell {
   display: grid;
   gap: 1rem;
@@ -229,6 +267,8 @@ textarea {
   justify-content: space-between;
   min-height: auto;
   padding: 0.95rem 1.25rem;
+  position: relative;
+  z-index: 20;
 }
 
 .hero-copy {
@@ -1450,9 +1490,193 @@ form.panel > button[type="submit"],
   color: var(--danger);
 }
 
+/* Overview tray */
+.overview-tray {
+  position: relative;
+  z-index: 100;
+}
+
+.overview-toggle {
+  background: var(--bg-panel);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  box-shadow: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.78rem;
+  padding: 0.36rem 0.85rem;
+}
+
+.overview-toggle:hover {
+  background: var(--surface-soft);
+  transform: none;
+}
+
+.overview-popover {
+  background: var(--bg-panel-strong);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.85rem 0.95rem;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.4rem);
+  width: min(360px, 88vw);
+  z-index: 1000;
+}
+
+.overview-head {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.overview-head strong {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.overview-close {
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  box-shadow: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 1rem;
+  height: 26px;
+  line-height: 1;
+  padding: 0;
+  width: 26px;
+}
+
+.overview-close:hover {
+  background: var(--surface-soft);
+  transform: none;
+}
+
+.overview-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.overview-grid > div {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: 0.18rem;
+  padding: 0.55rem 0.7rem;
+}
+
+.overview-grid strong {
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.overview-sub {
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.overview-latest {
+  font-size: 0.74rem;
+  margin: 0;
+  text-align: right;
+}
+
+.overview-wipe {
+  background: rgba(214, 95, 86, 0.12);
+  border: 1px solid rgba(214, 95, 86, 0.4);
+  border-radius: 10px;
+  box-shadow: none;
+  color: var(--danger);
+  font-size: 0.78rem;
+  font-weight: 600;
+  justify-self: stretch;
+  padding: 0.5rem 0.85rem;
+  width: 100%;
+}
+
+.overview-wipe:hover {
+  background: rgba(214, 95, 86, 0.2);
+  border-color: rgba(214, 95, 86, 0.55);
+}
+
+/* Danger zone (lives at the bottom of Codex Setup panel) */
+.danger-zone {
+  border-top: 1px dashed rgba(214, 95, 86, 0.35);
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.6rem;
+  padding-top: 0.7rem;
+}
+
+.danger-zone-label {
+  color: var(--danger);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.danger-zone-button {
+  font-size: 0.78rem;
+  padding: 0.5rem 0.9rem;
+  width: 100%;
+}
+
+/* Inline hint banner — subtle callout when an action needs a selected project */
+.hint-banner {
+  align-items: center;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--text);
+  display: flex;
+  font-size: 0.82rem;
+  font-weight: 400;
+  gap: 0.55rem;
+  line-height: 1.55;
+  margin: 0;
+  padding: 0.55rem 0.85rem;
+}
+
+.hint-banner::before {
+  align-items: center;
+  background: rgba(217, 130, 59, 0.14);
+  border-radius: 999px;
+  color: var(--accent-strong);
+  content: "i";
+  display: inline-flex;
+  flex-shrink: 0;
+  font-family: "Instrument Serif", serif;
+  font-size: 0.85rem;
+  font-style: italic;
+  font-weight: 400;
+  height: 1.2rem;
+  justify-content: center;
+  line-height: 1;
+  width: 1.2rem;
+}
+
+:root[data-theme="dark"] .hint-banner::before {
+  background: rgba(242, 176, 94, 0.16);
+  color: var(--accent);
+}
+
 /* Notifications */
 .notifications-tray {
   position: relative;
+  z-index: 100;
 }
 
 .notifications-toggle {
@@ -1488,7 +1712,7 @@ form.panel > button[type="submit"],
   right: 0;
   top: calc(100% + 0.4rem);
   width: min(320px, 80vw);
-  z-index: 50;
+  z-index: 1000;
 }
 
 .notifications-head {

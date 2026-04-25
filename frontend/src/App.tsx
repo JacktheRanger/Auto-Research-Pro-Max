@@ -6,6 +6,7 @@ import {
   type GroundedPaperResult,
   type LiteratureResult,
   type CitationGraph,
+  type OverviewStats,
   type RunDiff,
   type Paper,
   type PaperMetadataPayload,
@@ -359,6 +360,34 @@ const uiCopy = {
     projectUnarchivedMessage: "Project restored.",
     projectDeletedMessage: "Project deleted.",
     projectDeleteConfirm: "Delete project \"{title}\" and all its papers / runs? This cannot be undone.",
+    projectReset: "Reset run history",
+    projectResetSoftConfirm: "Reset \"{title}\"? This clears the plan, runs, stages, and audit log but keeps the project metadata and papers.",
+    projectResetHardConfirm: "Hard-reset \"{title}\"? This also removes all papers and chunks. The idea / direction / sandbox config are kept.",
+    projectResetSoftMessage: "Project reset — plan and run history cleared.",
+    projectResetHardMessage: "Project fully reset — papers and runs cleared.",
+    projectResetChoosePrompt: "Type 'soft' to reset runs only, 'hard' to also delete papers, or cancel.",
+    overviewTitle: "Overview",
+    overviewOpen: "Overview",
+    overviewProjects: "Projects",
+    overviewActive: "Active",
+    overviewArchived: "Archived",
+    overviewPapers: "Papers",
+    overviewChunks: "Chunks",
+    overviewRuns: "Runs",
+    overviewPlansReady: "Plans approved",
+    overviewTokens: "Total tokens",
+    overviewSpend: "Estimated spend",
+    overviewLatest: "Last activity",
+    overviewLoading: "Loading…",
+    overviewError: "Could not load overview.",
+    overviewWipe: "Wipe all data",
+    overviewWipeConfirm: "Type 'WIPE' to confirm deletion of every project, paper, plan, and run. Settings are kept.",
+    overviewWipeDone: "All project data cleared.",
+    overviewWipeFailed: "Wipe failed.",
+    selectProjectFirst: "Select or create a project first.",
+    selectFileFirst: "Choose a PDF file first.",
+    enterQueryFirst: "Enter a search query first.",
+    needProjectHint: "Pick a project on the left (or create one) to enable these actions.",
     notifications: "Notifications",
     notificationsEnable: "Enable desktop notifications",
     notificationsEnabled: "Desktop notifications enabled",
@@ -668,6 +697,34 @@ const uiCopy = {
     projectUnarchivedMessage: "项目已恢复。",
     projectDeletedMessage: "项目已删除。",
     projectDeleteConfirm: "确认删除项目 “{title}” 及其所有论文/运行？此操作不可恢复。",
+    projectReset: "重置运行历史",
+    projectResetSoftConfirm: "确认重置 “{title}”？将清空计划、运行、阶段和审计记录，但保留项目元数据和论文。",
+    projectResetHardConfirm: "确认完全重置 “{title}”？将额外删除所有论文和切块，仅保留 idea / 方向 / 沙箱配置。",
+    projectResetSoftMessage: "项目已重置 — 计划和运行历史已清空。",
+    projectResetHardMessage: "项目已完全重置 — 论文和运行已清空。",
+    projectResetChoosePrompt: "输入 soft 仅清运行；输入 hard 同时删除论文；取消则不操作。",
+    overviewTitle: "概览",
+    overviewOpen: "概览",
+    overviewProjects: "项目",
+    overviewActive: "活跃",
+    overviewArchived: "已归档",
+    overviewPapers: "论文",
+    overviewChunks: "切块",
+    overviewRuns: "运行",
+    overviewPlansReady: "已批计划",
+    overviewTokens: "Token 总数",
+    overviewSpend: "估算花费",
+    overviewLatest: "最近活动",
+    overviewLoading: "加载中…",
+    overviewError: "无法加载概览。",
+    overviewWipe: "清空全部数据",
+    overviewWipeConfirm: "输入 WIPE 以确认清空所有项目、论文、计划和运行。设置会被保留。",
+    overviewWipeDone: "所有项目数据已清空。",
+    overviewWipeFailed: "清空失败。",
+    selectProjectFirst: "请先选择或创建项目。",
+    selectFileFirst: "请先选择 PDF 文件。",
+    enterQueryFirst: "请先输入检索关键词。",
+    needProjectHint: "请先在左侧选择或创建一个项目，下方按钮才能使用。",
     notifications: "通知",
     notificationsEnable: "启用桌面通知",
     notificationsEnabled: "桌面通知已启用",
@@ -1382,6 +1439,129 @@ function NotificationsTray({
                 </li>
               ))}
             </ul>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+type OverviewCopy = {
+  overviewTitle: string;
+  overviewOpen: string;
+  overviewProjects: string;
+  overviewActive: string;
+  overviewArchived: string;
+  overviewPapers: string;
+  overviewChunks: string;
+  overviewRuns: string;
+  overviewPlansReady: string;
+  overviewTokens: string;
+  overviewSpend: string;
+  overviewLatest: string;
+  overviewLoading: string;
+  overviewError: string;
+  overviewWipe: string;
+};
+
+function formatOverviewTokens(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0";
+  if (value < 1000) return value.toString();
+  if (value < 1_000_000) return `${(value / 1000).toFixed(1)}k`;
+  return `${(value / 1_000_000).toFixed(2)}M`;
+}
+
+function formatOverviewCost(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "$0.00";
+  if (value < 0.01) return `$${value.toFixed(4)}`;
+  return `$${value.toFixed(2)}`;
+}
+
+function OverviewTray({
+  open,
+  stats,
+  error,
+  text,
+  onToggle,
+  onClose,
+  onWipe,
+}: {
+  open: boolean;
+  stats: OverviewStats | null;
+  error: string;
+  text: OverviewCopy;
+  onToggle: () => void;
+  onClose: () => void;
+  onWipe: () => void;
+}) {
+  return (
+    <div className={`overview-tray ${open ? "is-open" : ""}`}>
+      <button
+        type="button"
+        className="overview-toggle"
+        onClick={onToggle}
+        aria-label={text.overviewTitle}
+      >
+        📊 {text.overviewOpen}
+      </button>
+      {open ? (
+        <div className="overview-popover" role="dialog" aria-label={text.overviewTitle}>
+          <div className="overview-head">
+            <strong>{text.overviewTitle}</strong>
+            <button type="button" className="overview-close" onClick={onClose} aria-label="Close">
+              ×
+            </button>
+          </div>
+          {error ? (
+            <p className="muted">{error}</p>
+          ) : !stats ? (
+            <p className="muted">{text.overviewLoading}</p>
+          ) : (
+            <>
+              <div className="overview-grid">
+                <div>
+                  <span className="metric-label">{text.overviewProjects}</span>
+                  <strong>{stats.projects_total}</strong>
+                  <span className="overview-sub">
+                    {stats.projects_active} {text.overviewActive} · {stats.projects_archived} {text.overviewArchived}
+                  </span>
+                </div>
+                <div>
+                  <span className="metric-label">{text.overviewPapers}</span>
+                  <strong>{stats.papers_total}</strong>
+                  <span className="overview-sub">{stats.chunks_total} {text.overviewChunks}</span>
+                </div>
+                <div>
+                  <span className="metric-label">{text.overviewRuns}</span>
+                  <strong>{stats.runs_total}</strong>
+                  <span className="overview-sub">
+                    {Object.entries(stats.runs_by_status)
+                      .map(([key, val]) => `${key}: ${val}`)
+                      .join(" · ") || "—"}
+                  </span>
+                </div>
+                <div>
+                  <span className="metric-label">{text.overviewPlansReady}</span>
+                  <strong>{stats.plans_ready}</strong>
+                </div>
+                <div>
+                  <span className="metric-label">{text.overviewTokens}</span>
+                  <strong>{formatOverviewTokens(stats.total_tokens)}</strong>
+                </div>
+                <div>
+                  <span className="metric-label">{text.overviewSpend}</span>
+                  <strong>{formatOverviewCost(stats.total_cost_usd)}</strong>
+                </div>
+              </div>
+              {stats.latest_activity ? (
+                <p className="muted overview-latest">
+                  {text.overviewLatest}: {new Date(stats.latest_activity).toLocaleString()}
+                </p>
+              ) : null}
+              <button type="button" className="overview-wipe" onClick={onWipe}>
+                {text.overviewWipe}
+              </button>
+            </>
           )}
         </div>
       ) : null}
@@ -2172,7 +2352,19 @@ export default function App() {
   const [diffAgainstRunId, setDiffAgainstRunId] = useState("");
   const [runDiff, setRunDiff] = useState<RunDiff | null>(null);
   const [projectBranches, setProjectBranches] = useState<Project[]>([]);
+  const [overviewOpen, setOverviewOpen] = useState(false);
+  const [overviewStats, setOverviewStats] = useState<OverviewStats | null>(null);
+  const [overviewError, setOverviewError] = useState("");
   const [notifications, setNotifications] = useState<NotificationEntry[]>([]);
+  const [seenNotifKeys, setSeenNotifKeys] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const raw = window.localStorage.getItem("arpm-notif-seen");
+      return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+    } catch {
+      return new Set();
+    }
+  });
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">(
     typeof Notification === "undefined" ? "unsupported" : Notification.permission,
   );
@@ -2430,6 +2622,53 @@ export default function App() {
     setStatusMessage(text.projectDeletedMessage);
   }
 
+  async function handleResetProject(project: Project) {
+    if (typeof window === "undefined") return;
+    const choice = window.prompt(text.projectResetChoosePrompt, "soft");
+    if (!choice) return;
+    const mode = choice.trim().toLowerCase();
+    if (mode !== "soft" && mode !== "hard") return;
+    const dropPapers = mode === "hard";
+    const confirmText = (dropPapers ? text.projectResetHardConfirm : text.projectResetSoftConfirm)
+      .replace("{title}", project.title);
+    if (!window.confirm(confirmText)) return;
+    await api.resetProject(project.id, dropPapers);
+    if (selectedProjectId === project.id) {
+      await loadProject(project.id);
+    }
+    setStatusMessage(dropPapers ? text.projectResetHardMessage : text.projectResetSoftMessage);
+  }
+
+  async function handleOpenOverview() {
+    setOverviewOpen((current) => !current);
+    if (!overviewStats || overviewError) {
+      try {
+        setOverviewError("");
+        const stats = await api.overview();
+        setOverviewStats(stats);
+      } catch (error) {
+        setOverviewError(error instanceof Error ? error.message : text.overviewError);
+      }
+    }
+  }
+
+  async function handleWipeAll() {
+    if (typeof window === "undefined") return;
+    const input = window.prompt(text.overviewWipeConfirm, "");
+    if (!input || input.trim().toUpperCase() !== "WIPE") return;
+    try {
+      await api.wipeAll();
+      setStatusMessage(text.overviewWipeDone);
+      setProjects([]);
+      setProjectDetail(null);
+      setSelectedProjectId("");
+      const stats = await api.overview();
+      setOverviewStats(stats);
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : text.overviewWipeFailed);
+    }
+  }
+
   async function loadProject(projectId: string) {
     const detail = await api.getProject(projectId);
     setSelectedProjectId(projectId);
@@ -2491,16 +2730,38 @@ export default function App() {
     setExecutionForm(projectToExecutionForm(projectDetail?.project ?? null));
   }, [projectDetail?.project]);
 
-  function pushNotification(entry: Omit<NotificationEntry, "id" | "createdAt">) {
+  function markNotifSeen(key: string) {
+    setSeenNotifKeys((current) => {
+      if (current.has(key)) return current;
+      const next = new Set(current);
+      next.add(key);
+      try {
+        const trimmed = Array.from(next).slice(-200);
+        window.localStorage.setItem("arpm-notif-seen", JSON.stringify(trimmed));
+      } catch {
+        // ignore quota / privacy mode failures
+      }
+      return next;
+    });
+  }
+
+  function pushNotification(entry: Omit<NotificationEntry, "id" | "createdAt"> & { dedupeKey?: string }) {
+    if (entry.dedupeKey && seenNotifKeys.has(entry.dedupeKey)) {
+      return;
+    }
+    const { dedupeKey, ...rest } = entry;
     const next: NotificationEntry = {
-      ...entry,
+      ...rest,
       id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       createdAt: Date.now(),
     };
     setNotifications((current) => [next, ...current].slice(0, 12));
+    if (dedupeKey) {
+      markNotifSeen(dedupeKey);
+    }
     if (typeof Notification !== "undefined" && Notification.permission === "granted") {
       try {
-        new Notification(entry.title, { body: entry.body });
+        new Notification(rest.title, { body: rest.body });
       } catch {
         // ignore — desktop notification failures should not impact UI
       }
@@ -2519,6 +2780,7 @@ export default function App() {
       kind: "plan_ready",
       title: text.notificationPlanReadyTitle,
       body: projectDetail.project.title,
+      dedupeKey: `plan_ready:${projectDetail.project.id}`,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planStatus, projectDetail?.project.id]);
@@ -2534,18 +2796,21 @@ export default function App() {
         kind: "approval_needed",
         title: text.notificationApprovalNeededTitle,
         body: `${projectDetail?.project.title ?? "Run"} · stage ${pendingGate}`,
+        dedupeKey: `gate:${run.id}:${pendingGate}`,
       });
     } else if (runStatus === "completed") {
       pushNotification({
         kind: "run_complete",
         title: text.notificationRunCompleteTitle,
         body: projectDetail?.project.title ?? "Run completed",
+        dedupeKey: `run_complete:${run.id}`,
       });
     } else if (runStatus === "failed") {
       pushNotification({
         kind: "run_failed",
         title: text.notificationRunFailedTitle,
         body: run.error || projectDetail?.project.title || "Run failed",
+        dedupeKey: `run_failed:${run.id}`,
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2629,6 +2894,7 @@ export default function App() {
   async function handleSaveExecutionConfig(event: React.FormEvent) {
     event.preventDefault();
     if (!selectedProjectId) {
+      setStatusMessage(text.selectProjectFirst);
       return;
     }
     const payload = executionPayloadFromForm(executionForm);
@@ -2643,7 +2909,12 @@ export default function App() {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const file = form.get("paper") as File | null;
-    if (!selectedProjectId || !file) {
+    if (!selectedProjectId) {
+      setStatusMessage(text.selectProjectFirst);
+      return;
+    }
+    if (!file) {
+      setStatusMessage(text.selectFileFirst);
       return;
     }
     const response = await api.uploadPaper(selectedProjectId, file, uploadNotes);
@@ -2664,6 +2935,11 @@ export default function App() {
   async function handleAddPaperUrl(event: React.FormEvent) {
     event.preventDefault();
     if (!selectedProjectId) {
+      setStatusMessage(text.selectProjectFirst);
+      return;
+    }
+    if (!urlPaper.url.trim()) {
+      setStatusMessage(text.enterQueryFirst);
       return;
     }
     const response = await api.addPaperUrl(selectedProjectId, urlPaper);
@@ -2682,7 +2958,12 @@ export default function App() {
 
   async function handleSearchLiterature(event: React.FormEvent) {
     event.preventDefault();
-    if (!selectedProjectId || !literatureQuery.trim()) {
+    if (!selectedProjectId) {
+      setStatusMessage(text.selectProjectFirst);
+      return;
+    }
+    if (!literatureQuery.trim()) {
+      setStatusMessage(text.enterQueryFirst);
       return;
     }
     const response = await api.searchLiterature(selectedProjectId, {
@@ -2695,7 +2976,12 @@ export default function App() {
 
   async function handleSearchGroundedPapers(event: React.FormEvent) {
     event.preventDefault();
-    if (!selectedProjectId || !groundedQuery.trim()) {
+    if (!selectedProjectId) {
+      setStatusMessage(text.selectProjectFirst);
+      return;
+    }
+    if (!groundedQuery.trim()) {
+      setStatusMessage(text.enterQueryFirst);
       return;
     }
     const response = await api.searchPaperGrounding(selectedProjectId, {
@@ -3029,6 +3315,15 @@ export default function App() {
           </div>
           <span>{statusMessage}</span>
           <span>{connectionMessage}</span>
+          <OverviewTray
+            open={overviewOpen}
+            stats={overviewStats}
+            error={overviewError}
+            text={text}
+            onToggle={() => void handleOpenOverview()}
+            onClose={() => setOverviewOpen(false)}
+            onWipe={() => void handleWipeAll()}
+          />
           <NotificationsTray
             notifications={notifications}
             permission={notificationPermission}
@@ -3110,6 +3405,16 @@ export default function App() {
               {text.testConnection}
             </button>
             <p className="muted">{connectionMessage || text.noConnectionTest}</p>
+            <div className="danger-zone">
+              <span className="danger-zone-label">{text.overviewWipe}</span>
+              <button
+                type="button"
+                className="overview-wipe danger-zone-button"
+                onClick={() => void handleWipeAll()}
+              >
+                {text.overviewWipe}
+              </button>
+            </div>
           </section>
 
           <section className="panel">
@@ -3161,6 +3466,13 @@ export default function App() {
                         onClick={() => void handleDuplicateProject(project.id)}
                       >
                         ⧉
+                      </button>
+                      <button
+                        type="button"
+                        title={text.projectReset}
+                        onClick={() => void handleResetProject(project)}
+                      >
+                        ↺
                       </button>
                       <button
                         type="button"
@@ -3297,6 +3609,9 @@ export default function App() {
                 <h2><span className="step-num">2</span>{text.paperIntake}</h2>
               </div>
               <p className="muted">{text.paperIntakeBody}</p>
+              {!selectedProjectId ? (
+                <p className="hint-banner">{text.needProjectHint}</p>
+              ) : null}
               <form className="stacked-form" onSubmit={handleUploadPaper}>
                 <label>
                   {text.localPdf}
@@ -3415,6 +3730,9 @@ export default function App() {
 	              </button>
 	            </div>
 	            <p className="muted">{text.executionConfigBody}</p>
+	            {!selectedProjectId ? (
+	              <p className="hint-banner">{text.needProjectHint}</p>
+	            ) : null}
 	            <form className="stacked-form" id="execution-config-form" onSubmit={handleSaveExecutionConfig}>
 	              <div className="split-fields">
 	                <label>

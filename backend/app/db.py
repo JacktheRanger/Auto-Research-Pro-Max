@@ -639,6 +639,108 @@ def delete_project(project_id: str) -> bool:
         return cursor.rowcount > 0
 
 
+def reset_project_data(project_id: str, *, drop_papers: bool = False) -> bool:
+    """Drop runs / plan / audit for the project.
+
+    When drop_papers is True the project's papers and chunks are removed too,
+    leaving only the project's metadata (idea, direction, sandbox config).
+    """
+    with _LOCK, _connect() as conn:
+        row = conn.execute("SELECT id FROM projects WHERE id = ?", (project_id,)).fetchone()
+        if row is None:
+            return False
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute(
+            "DELETE FROM run_audit_events WHERE run_id IN (SELECT id FROM runs WHERE project_id = ?)",
+            (project_id,),
+        )
+        conn.execute(
+            "DELETE FROM run_stages WHERE run_id IN (SELECT id FROM runs WHERE project_id = ?)",
+            (project_id,),
+        )
+        conn.execute("DELETE FROM runs WHERE project_id = ?", (project_id,))
+        conn.execute("DELETE FROM plans WHERE project_id = ?", (project_id,))
+        if drop_papers:
+            conn.execute("DELETE FROM paper_chunks WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM papers WHERE project_id = ?", (project_id,))
+        conn.execute(
+            "UPDATE projects SET status = ?, updated_at = ? WHERE id = ?",
+            ("draft", utc_now(), project_id),
+        )
+        conn.commit()
+        return True
+
+
+def wipe_all_data() -> dict[str, int]:
+    """Remove every project / paper / run. Settings are preserved."""
+    with _LOCK, _connect() as conn:
+        counts = {
+            "projects": conn.execute("SELECT COUNT(*) FROM projects").fetchone()[0],
+            "papers": conn.execute("SELECT COUNT(*) FROM papers").fetchone()[0],
+            "runs": conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0],
+            "plans": conn.execute("SELECT COUNT(*) FROM plans").fetchone()[0],
+        }
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("DELETE FROM run_audit_events")
+        conn.execute("DELETE FROM run_stages")
+        conn.execute("DELETE FROM runs")
+        conn.execute("DELETE FROM plans")
+        conn.execute("DELETE FROM paper_chunks")
+        conn.execute("DELETE FROM papers")
+        conn.execute("DELETE FROM projects")
+        conn.commit()
+        return counts
+
+
+def get_overview_stats() -> dict[str, Any]:
+    """Aggregate counts and cost totals for the overview popover."""
+    with _LOCK, _connect() as conn:
+        projects_total = conn.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
+        projects_archived = conn.execute(
+            "SELECT COUNT(*) FROM projects WHERE archived_at != ''"
+        ).fetchone()[0]
+        papers_total = conn.execute("SELECT COUNT(*) FROM papers").fetchone()[0]
+        chunks_total = conn.execute("SELECT COUNT(*) FROM paper_chunks").fetchone()[0]
+        runs_total = conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
+        runs_by_status: dict[str, int] = {}
+        for row in conn.execute("SELECT status, COUNT(*) AS c FROM runs GROUP BY status"):
+            runs_by_status[row["status"]] = row["c"]
+        plans_ready = conn.execute(
+            "SELECT COUNT(*) FROM plans WHERE status IN ('ready','approved')"
+        ).fetchone()[0]
+        total_tokens = 0
+        total_cost = 0.0
+        for row in conn.execute("SELECT metadata_json FROM runs"):
+            try:
+                meta = json.loads(row["metadata_json"] or "{}")
+            except Exception:
+                continue
+            cs = meta.get("cost_summary") or {}
+            totals = cs.get("totals") or {}
+            total_tokens += int(totals.get("total_tokens") or 0)
+            total_cost += float(totals.get("cost_usd") or 0.0)
+        latest_project_activity = conn.execute(
+            "SELECT MAX(updated_at) FROM projects"
+        ).fetchone()[0] or ""
+        latest_run_activity = conn.execute(
+            "SELECT MAX(updated_at) FROM runs"
+        ).fetchone()[0] or ""
+        latest_activity = max(latest_project_activity, latest_run_activity, "")
+        return {
+            "projects_total": projects_total,
+            "projects_active": projects_total - projects_archived,
+            "projects_archived": projects_archived,
+            "papers_total": papers_total,
+            "chunks_total": chunks_total,
+            "runs_total": runs_total,
+            "runs_by_status": runs_by_status,
+            "plans_ready": plans_ready,
+            "total_tokens": total_tokens,
+            "total_cost_usd": round(total_cost, 4),
+            "latest_activity": latest_activity,
+        }
+
+
 def add_paper_source(payload: dict[str, Any]) -> dict[str, Any]:
     paper_id = f"paper_{uuid.uuid4().hex[:10]}"
     now = utc_now()
