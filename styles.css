@@ -171,6 +171,21 @@ body::after {
   border: 1px solid var(--line);
 }
 
+.preview-badge {
+  background: #c0392b;
+  border-radius: 999px;
+  box-shadow: 0 4px 14px rgba(192, 57, 43, 0.32);
+  color: #ffffff;
+  font-family: "Space Grotesk", "Inter", system-ui, sans-serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  line-height: 1;
+  padding: 0.85rem 1.6rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .hero-copy h2 {
   font-size: clamp(1.1rem, 2vw, 1.45rem);
   font-weight: 400;
@@ -207,9 +222,7 @@ body::after {
   max-width: 1400px;
   border-radius: 20px;
   box-shadow: var(--shadow);
-  margin-top: 3rem;
-  border: 1px solid var(--glass-top);
-  border-left: 1px solid var(--glass-left);
+  margin-top: 5.5rem;
   aspect-ratio: auto;
   animation: slideUpFade 1s cubic-bezier(0.16, 1, 0.3, 1) forwards, floatImg 8s ease-in-out infinite;
   animation-delay: 0s, 1s;
@@ -500,10 +513,10 @@ a:hover {
     gap: 0.8rem; /* 仅移动端收紧子卡片间距 */
   }
   .demo-img {
-    /* 移动端用负 margin 抵消 .hero 左右 padding，缩小左右白边 */
-    margin-left: -1rem;
-    margin-right: -1rem;
-    width: calc(100% + 2rem);
+    /* 移动端：抵消 .hero 1.5rem + .page-shell 1.5rem 的左右内边距，仅保留极窄的呼吸边 */
+    margin-left: -2.5rem;
+    margin-right: -2.5rem;
+    width: calc(100% + 5rem);
     max-width: none;
   }
 }
