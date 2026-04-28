@@ -502,6 +502,7 @@ a:hover {
   }
   .hero {
     padding-top: 3rem; /* 恢复原始高度 */
+    overflow: hidden; /* 硬性约束：任何子元素都不能越出圆角边界 */
   }
   .section-title {
     font-size: 1.7rem !important;
@@ -526,6 +527,8 @@ a:hover {
     margin-right: 0;
     width: 100%;
     max-width: 100%;
+    display: block;
+    box-sizing: border-box;
   }
 }
 
