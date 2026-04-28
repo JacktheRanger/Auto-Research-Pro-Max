@@ -2,13 +2,16 @@
   <img src="LOGO/logo.svg" alt="Auto Research Pro Max Logo" width="120" height="120" />
 </p>
 
-<h1 align="center">Auto Research Pro Max</h1>
+<h1 align="center">
+  Auto Research Pro Max
+  <br>
+  <img src="https://img.shields.io/badge/-Research%20Preview-c0392b?style=for-the-badge" alt="Research Preview" />
+</h1>
 
 <p align="center">
   <a href="https://jacktheranger.github.io/Auto-Research-Pro-Max">
     <img src="https://img.shields.io/badge/Official_Website-Visit-13232b?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Official Website" />
   </a>
-  <img src="https://img.shields.io/badge/-Research%20Preview-c0392b?style=for-the-badge" alt="Research Preview" />
 </p>
 
 <p align="center">
