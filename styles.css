@@ -504,6 +504,12 @@ a:hover {
     padding-top: 3rem; /* 恢复原始高度 */
     overflow: hidden; /* 硬性约束：任何子元素都不能越出圆角边界 */
   }
+  .preview-badge {
+    font-size: 0.8rem;
+    padding: 0.55rem 1.1rem;
+    letter-spacing: 0.19em;
+    box-shadow: 0 3px 11px rgba(192, 57, 43, 0.28);
+  }
   .section-title {
     font-size: 1.7rem !important;
     font-weight: 400;
