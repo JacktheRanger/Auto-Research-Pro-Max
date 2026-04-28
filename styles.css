@@ -502,7 +502,6 @@ a:hover {
   }
   .hero {
     padding-top: 3rem; /* 恢复原始高度 */
-    overflow: hidden; /* 硬性约束：任何子元素都不能越出圆角边界 */
   }
   .preview-badge {
     font-size: 0.8rem;
@@ -528,11 +527,12 @@ a:hover {
     gap: 0.8rem; /* 仅移动端收紧子卡片间距 */
   }
   .demo-img {
-    /* 移动端：图片严格落在 hero 卡片框内，保留卡片自身的 1.5rem 呼吸边 */
-    margin-left: 0;
-    margin-right: 0;
-    width: 100%;
-    max-width: 100%;
+    /* 移动端：用负 margin 突破 hero 1.5rem 内边距的大部分，
+       仅保留 0.5rem 视觉缓冲，避免图片角伸进 hero 32px 圆角弧线区域 */
+    margin-left: -1rem;
+    margin-right: -1rem;
+    width: calc(100% + 2rem);
+    max-width: none;
     display: block;
     box-sizing: border-box;
   }
