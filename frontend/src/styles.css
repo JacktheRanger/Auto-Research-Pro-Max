@@ -294,6 +294,10 @@ input[type="file"]::file-selector-button:active {
   margin: 0;
   padding-bottom: 0.08em;
   width: fit-content;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 .hero-title-row {

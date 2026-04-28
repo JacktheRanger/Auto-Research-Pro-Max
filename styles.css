@@ -133,6 +133,10 @@ body::after {
   margin: 0 auto;
   font-size: clamp(4rem, 8vw, 7rem);
   line-height: 0.95;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 .section-title {
@@ -150,6 +154,10 @@ body::after {
   transform: scaleX(1.15); /* Stretch individual letters to be wider */
   transform-origin: center;
   font-size: clamp(2rem, 5vw, 3rem);
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 /* Disable stretching for Chinese characters */
@@ -174,14 +182,14 @@ body::after {
 .preview-badge {
   background: #c0392b;
   border-radius: 999px;
-  box-shadow: 0 4px 14px rgba(192, 57, 43, 0.32);
+  box-shadow: 0 3px 12px rgba(192, 57, 43, 0.3);
   color: #ffffff;
   font-family: "Space Grotesk", "Inter", system-ui, sans-serif;
-  font-size: 1.05rem;
+  font-size: 0.9rem;
   font-weight: 700;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.2em;
   line-height: 1;
-  padding: 0.85rem 1.6rem;
+  padding: 0.65rem 1.25rem;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -206,7 +214,7 @@ body::after {
   flex-direction: column;
   align-items: center;
   gap: 1.25rem;
-  max-width: min(900px, 100%);
+  max-width: min(1100px, 100%);
   animation: slideUpFade 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
@@ -272,7 +280,7 @@ body::after {
 }
 
 .hero-copy h2 {
-  max-width: 850px;
+  max-width: 1050px;
   text-align: center;
   margin: 1.5rem auto 0 auto;
   font-size: clamp(1.1rem, 2vw, 1.45rem);
@@ -282,7 +290,7 @@ body::after {
 
 .inline-actions {
   display: flex;
-  margin-top: 2.5rem;
+  margin-top: 1rem;
   justify-content: center;
   gap: 1rem;
 }
@@ -497,7 +505,7 @@ a:hover {
   }
   .section-title {
     font-size: 1.7rem !important;
-    font-weight: 700;
+    font-weight: 400;
     letter-spacing: -0.02em;
   }
   .stage-card h3 {
@@ -506,18 +514,18 @@ a:hover {
   }
   .hero-brand {
     font-size: 3.5rem !important;
-    font-weight: 700;
+    font-weight: 400;
     letter-spacing: -0.02em;
   }
   .workflow-grid {
     gap: 0.8rem; /* 仅移动端收紧子卡片间距 */
   }
   .demo-img {
-    /* 移动端：抵消 .hero 1.5rem + .page-shell 1.5rem 的左右内边距，仅保留极窄的呼吸边 */
-    margin-left: -2.5rem;
-    margin-right: -2.5rem;
-    width: calc(100% + 5rem);
-    max-width: none;
+    /* 移动端：图片严格落在 hero 卡片框内，保留卡片自身的 1.5rem 呼吸边 */
+    margin-left: 0;
+    margin-right: 0;
+    width: 100%;
+    max-width: 100%;
   }
 }
 
